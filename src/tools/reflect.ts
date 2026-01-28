@@ -265,7 +265,7 @@ export async function getLessons(input: z.infer<typeof GetLessonsSchema>) {
     }
 
     const retros = await pb.collection('retrospectives').getList(1, limit, {
-      filter,
+      ...(filter && { filter }),
       sort: '-created',
     });
 
@@ -278,14 +278,16 @@ export async function getLessons(input: z.infer<typeof GetLessonsSchema>) {
     }> = [];
 
     for (const retro of retros.items) {
-      const lessons = retro.lessons_learned || [];
+      const lessons = Array.isArray(retro.lessons_learned) ? retro.lessons_learned : [];
       for (const lesson of lessons) {
-        allLessons.push({
-          lesson,
-          from_retro: retro.id,
-          period: retro.period,
-          created: retro.created,
-        });
+        if (typeof lesson === 'string' && lesson.trim()) {
+          allLessons.push({
+            lesson,
+            from_retro: retro.id,
+            period: retro.period,
+            created: retro.created,
+          });
+        }
       }
     }
 

@@ -4,6 +4,21 @@ import { logger } from '../utils/logger.js';
 import { createEmbedding, hashContent } from '../utils/embeddings.js';
 import { getActiveSessionId } from './session.js';
 
+// Helper function to convert UTC to Thai timezone (Asia/Bangkok)
+function toThaiTime(utcDateString: string): string {
+  const date = new Date(utcDateString);
+  return date.toLocaleString('th-TH', {
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+}
+
 // Schema definitions
 export const CaptureObservationSchema = z.object({
   project: z.string().optional().describe('Project name or ID'),
@@ -132,6 +147,7 @@ export async function captureObservation(input: z.infer<typeof CaptureObservatio
     return {
       success: true,
       id: record.id,
+      created: toThaiTime(record.created),
       message: `Observation "${input.title}" captured successfully`,
     };
   } catch (error) {
@@ -166,6 +182,7 @@ export async function captureDecision(input: z.infer<typeof CaptureDecisionSchem
     return {
       success: true,
       id: record.id,
+      created: toThaiTime(record.created),
       message: `Decision "${input.title}" captured successfully`,
     };
   } catch (error) {
@@ -201,6 +218,7 @@ export async function captureBug(input: z.infer<typeof CaptureBugSchema>) {
     return {
       success: true,
       id: record.id,
+      created: toThaiTime(record.created),
       message: `Bug fix captured successfully`,
     };
   } catch (error) {
@@ -236,6 +254,7 @@ export async function saveSnippet(input: z.infer<typeof SaveSnippetSchema>) {
     return {
       success: true,
       id: record.id,
+      created: toThaiTime(record.created),
       message: `Snippet "${input.title}" saved successfully`,
     };
   } catch (error) {
