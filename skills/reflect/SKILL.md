@@ -1,5 +1,6 @@
 ---
-description: Generate retrospective and insights from work sessions
+description: สร้าง retrospective สรุปสิ่งที่เรียนรู้จาก session หรือช่วงเวลาที่กำหนด
+model: haiku
 ---
 
 # Reflect - Generate Retrospective
@@ -30,13 +31,39 @@ Use `get_lessons` with:
 
 ---
 
-When the user wants to reflect:
-1. Check if there's an active session with `get_current_session`
-2. If ending a session, use `end_session` first
-3. Generate retrospective with `generate_retrospective`
-4. Present insights in a clear format:
-   - Achievements
-   - Challenges faced
-   - Key learnings
-   - Suggestions for improvement
-5. Optionally show related past lessons with `get_lessons`
+## Processing Instructions
+
+After retrieving retrospective data, analyze and synthesize insights:
+
+1. **Identify Trends**: Look for recurring themes across sessions
+2. **Extract Lessons**: Summarize key learnings that can be applied
+3. **Prioritize Actions**: Suggest actionable improvements
+4. **Connect Patterns**: Link related observations and bugs
+
+## Output Format
+
+Present retrospective in this format:
+
+### 📊 Session Summary
+- Duration: X hours
+- Goal: [Original goal]
+- Outcome: [Achieved/Partial/Not achieved]
+
+### ✅ What Went Well
+- Achievement 1
+- Achievement 2
+
+### ⚡ Challenges Faced
+- Challenge 1: How it was handled
+- Challenge 2: How it was handled
+
+### 📚 Key Learnings
+1. **Learning 1**: Description and how to apply
+2. **Learning 2**: Description and how to apply
+
+### 🎯 Action Items
+- [ ] Action 1 (Priority: High/Medium/Low)
+- [ ] Action 2 (Priority: High/Medium/Low)
+
+### 🔗 Related Past Lessons
+- Lesson from [date]: Brief summary

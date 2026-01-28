@@ -1,5 +1,6 @@
 ---
-description: Search and retrieve knowledge from Second Brain
+description: ค้นหาความรู้จาก Second Brain - bugs, patterns, decisions ที่เคยบันทึก
+model: haiku
 ---
 
 # Recall - Search Knowledge
@@ -24,8 +25,29 @@ Use `semantic_search` for meaning-based search:
 
 ---
 
-Based on the user's question:
-1. Determine if it's a keyword search or conceptual search
-2. Use the appropriate tool
-3. Present results in a clear, organized format
-4. Suggest related searches if results are limited
+## Processing Instructions
+
+After retrieving search results, process them as follows:
+
+1. **Rank by Relevance**: Order results by how closely they match the user's query
+2. **Highlight Key Points**: Extract the most important information from each result
+3. **Summarize**: Provide a concise summary of findings
+4. **Suggest Related**: If results are limited, suggest related searches
+
+## Output Format
+
+Present results in this format:
+
+### Found [N] relevant items:
+
+**[Most Relevant]**
+- Title/Type
+- Key insight
+- Why it's relevant
+
+**[Other Results]**
+- Brief summary of each
+
+### Related Searches
+- Suggested query 1
+- Suggested query 2

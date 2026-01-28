@@ -1,5 +1,6 @@
 ---
-description: Load project context from Second Brain (tech stack, decisions, bugs, patterns)
+description: โหลด context ของโปรเจคปัจจุบันจาก Second Brain
+model: haiku
 ---
 
 # Context - Load Project Context
@@ -30,11 +31,35 @@ Use `save_preference` to store user preferences:
 
 ---
 
-When the user asks for context:
-1. Call `get_project_context` with the current project name
-2. Summarize the key information:
-   - What technologies are used
-   - Important decisions made
-   - Common bugs encountered
-   - Patterns discovered
-3. Highlight anything particularly relevant to the current task
+## Processing Instructions
+
+After retrieving project context, process and summarize as follows:
+
+1. **Tech Stack Summary**: List key technologies with versions
+2. **Important Decisions**: Highlight recent decisions that affect current work
+3. **Known Issues**: List bugs/gotchas relevant to the current task
+4. **Patterns to Follow**: Identify patterns that should be applied
+5. **Quick Tips**: Extract actionable tips from the context
+
+## Output Format
+
+Present context in this format:
+
+### 🛠️ Tech Stack
+- Language/Framework (version)
+- Key dependencies
+
+### 📋 Recent Decisions
+- Decision 1: Brief summary
+- Decision 2: Brief summary
+
+### ⚠️ Known Issues
+- Issue 1: Description and workaround
+- Issue 2: Description and workaround
+
+### 📐 Patterns
+- Pattern 1: When to use
+- Pattern 2: When to use
+
+### 💡 Quick Tips
+- Tip relevant to current context
