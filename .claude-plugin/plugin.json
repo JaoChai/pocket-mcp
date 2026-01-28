@@ -16,6 +16,28 @@
     "mcp",
     "claude-code"
   ],
-  "mcpServers": "../.mcp.json",
-  "skills": "../skills"
+  "mcpServers": ".mcp.json",
+  "skills": "skills",
+  "userConfig": {
+    "POCKETBASE_URL": {
+      "type": "string",
+      "description": "PocketBase instance URL (e.g., https://your-instance.pockethost.io)",
+      "required": true
+    },
+    "POCKETBASE_EMAIL": {
+      "type": "string",
+      "description": "PocketBase admin email",
+      "required": true
+    },
+    "POCKETBASE_PASSWORD": {
+      "type": "password",
+      "description": "PocketBase admin password",
+      "required": true
+    },
+    "OPENAI_API_KEY": {
+      "type": "password",
+      "description": "OpenAI API key for semantic search embeddings",
+      "required": true
+    }
+  }
 }
