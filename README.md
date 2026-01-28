@@ -13,7 +13,19 @@ A Model Context Protocol (MCP) server that turns [PocketBase](https://pocketbase
 
 ## Quick Start
 
-### 1. Install
+### Option 1: Claude Code Plugin (Recommended)
+
+```bash
+# 1. Add marketplace
+/plugin marketplace add JaoChai/pocket-mcp
+
+# 2. Install plugin
+/plugin install pocket-mcp@jaochai-plugins
+
+# 3. Configure (will prompt for credentials)
+```
+
+### Option 2: Manual MCP Setup
 
 Add to your project's `.mcp.json`:
 
@@ -22,7 +34,7 @@ Add to your project's `.mcp.json`:
   "mcpServers": {
     "pocket-mcp": {
       "command": "npx",
-      "args": ["-y", "pocket-mcp"],
+      "args": ["-y", "github:JaoChai/pocket-mcp"],
       "env": {
         "POCKETBASE_URL": "https://your-pocketbase-instance.com",
         "POCKETBASE_EMAIL": "admin@example.com",
@@ -34,19 +46,7 @@ Add to your project's `.mcp.json`:
 }
 ```
 
-### 2. Setup PocketBase
-
-Deploy PocketBase (self-host or use [PocketHost](https://pockethost.io/), [Elestio](https://elest.io/), etc.)
-
-Then run the setup script:
-
-```bash
-npx pocket-mcp-setup
-```
-
-### 3. Enable in Claude Code
-
-Add to `.claude/settings.local.json`:
+Then enable in `.claude/settings.local.json`:
 
 ```json
 {
@@ -54,18 +54,47 @@ Add to `.claude/settings.local.json`:
 }
 ```
 
-Restart Claude Code and you're ready!
+### Setup PocketBase
+
+Deploy PocketBase (self-host or use [PocketHost](https://pockethost.io/), [Elestio](https://elest.io/), etc.)
+
+Then run the setup script to create collections:
+
+```bash
+git clone https://github.com/JaoChai/pocket-mcp.git
+cd pocket-mcp
+npm install
+
+# Set environment variables
+export POCKETBASE_URL="https://your-instance.com"
+export POCKETBASE_EMAIL="admin@example.com"
+export POCKETBASE_PASSWORD="your-password"
+
+# Run setup
+npm run setup-collections
+```
 
 ## Installation Options
 
-### Option 1: npx (Recommended)
-
-No installation needed. Just add to `.mcp.json` as shown above.
-
-### Option 2: Global Install
+### Option 1: Plugin (Easiest)
 
 ```bash
-npm install -g pocket-mcp
+/plugin marketplace add JaoChai/pocket-mcp
+/plugin install pocket-mcp@jaochai-plugins
+```
+
+### Option 2: npx from GitHub
+
+```json
+{
+  "mcpServers": {
+    "pocket-mcp": {
+      "command": "npx",
+      "args": ["-y", "github:JaoChai/pocket-mcp"],
+      "env": { ... }
+    }
+  }
+}
 ```
 
 ### Option 3: From Source
@@ -177,14 +206,16 @@ Claude, what do you know about this project?
 Claude, generate a retrospective for today's session
 ```
 
-## Recommended Skills (Slash Commands)
+## Built-in Skills (Slash Commands)
 
-Create these in `.claude/commands/`:
+When installed as a plugin, these skills are available automatically:
 
-### `/learn` - Capture knowledge
-### `/context` - Load project context
-### `/recall` - Search knowledge
-### `/reflect` - Generate retrospective
+| Skill | Description |
+|-------|-------------|
+| `/pocket-mcp:learn` | Capture knowledge (observations, decisions, bugs, snippets) |
+| `/pocket-mcp:recall` | Search and retrieve knowledge |
+| `/pocket-mcp:context` | Load project context |
+| `/pocket-mcp:reflect` | Generate retrospective and insights |
 
 ## Development
 

@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "pocket-brain": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/index.js"],
+      "cwd": "${CLAUDE_PLUGIN_ROOT}",
+      "env": {
+        "POCKETBASE_URL": "${POCKETBASE_URL}",
+        "POCKETBASE_EMAIL": "${POCKETBASE_EMAIL}",
+        "POCKETBASE_PASSWORD": "${POCKETBASE_PASSWORD}",
+        "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+        "LOG_LEVEL": "info"
+      }
+    }
+  }
+}

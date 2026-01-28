@@ -1,0 +1,45 @@
+{
+  "name": "jaochai-plugins",
+  "description": "JaoChai's Claude Code Plugins",
+  "plugins": [
+    {
+      "id": "pocket-mcp",
+      "name": "Pocket MCP",
+      "description": "PocketBase Second Brain - Store and retrieve knowledge, decisions, bugs, and patterns across projects",
+      "version": "1.0.0",
+      "author": {
+        "name": "JaoChai",
+        "url": "https://github.com/JaoChai"
+      },
+      "source": {
+        "type": "github",
+        "repo": "JaoChai/pocket-mcp",
+        "ref": "main"
+      },
+      "keywords": ["second-brain", "knowledge-management", "pocketbase", "mcp"],
+      "license": "MIT",
+      "userConfig": {
+        "POCKETBASE_URL": {
+          "type": "string",
+          "description": "PocketBase instance URL",
+          "required": true
+        },
+        "POCKETBASE_EMAIL": {
+          "type": "string",
+          "description": "PocketBase admin email",
+          "required": true
+        },
+        "POCKETBASE_PASSWORD": {
+          "type": "password",
+          "description": "PocketBase admin password",
+          "required": true
+        },
+        "OPENAI_API_KEY": {
+          "type": "password",
+          "description": "OpenAI API key for semantic search",
+          "required": true
+        }
+      }
+    }
+  ]
+}

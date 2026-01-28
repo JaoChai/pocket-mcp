@@ -1,0 +1,21 @@
+{
+  "name": "pocket-mcp",
+  "version": "1.0.0",
+  "description": "PocketBase Second Brain - Store and retrieve knowledge, decisions, bugs, and patterns across projects",
+  "author": {
+    "name": "JaoChai",
+    "url": "https://github.com/JaoChai"
+  },
+  "repository": "https://github.com/JaoChai/pocket-mcp",
+  "homepage": "https://github.com/JaoChai/pocket-mcp#readme",
+  "license": "MIT",
+  "keywords": [
+    "second-brain",
+    "knowledge-management",
+    "pocketbase",
+    "mcp",
+    "claude-code"
+  ],
+  "mcpServers": "../.mcp.json",
+  "skills": "../skills"
+}
