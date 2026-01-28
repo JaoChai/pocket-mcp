@@ -1,0 +1,62 @@
+{
+  "name": "pocket-mcp",
+  "version": "1.0.0",
+  "description": "PocketBase Second Brain MCP Server for Claude Code - Store and retrieve knowledge, decisions, bugs, and patterns",
+  "main": "dist/index.js",
+  "type": "module",
+  "bin": {
+    "pocket-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "setup-collections": "tsx scripts/setup-collections.ts",
+    "test": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "pocketbase",
+    "claude-code",
+    "claude",
+    "anthropic",
+    "second-brain",
+    "knowledge-management",
+    "ai-assistant",
+    "developer-tools"
+  ],
+  "author": "JaoChai",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JaoChai/pocket-mcp.git"
+  },
+  "homepage": "https://github.com/JaoChai/pocket-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/JaoChai/pocket-mcp/issues"
+  },
+  "files": [
+    "dist",
+    "scripts",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.7.0",
+    "openai": "^4.77.0",
+    "p-retry": "^6.2.0",
+    "pocketbase": "^0.25.2",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
