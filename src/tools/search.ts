@@ -23,6 +23,18 @@ export const SemanticSearchSchema = z.object({
   limit: z.number().min(1).max(20).optional().describe('Maximum results (default: 5)'),
 });
 
+// Helper function to check if record matches search query
+function matchesQuery(record: Record<string, unknown>, fields: string[], query: string): boolean {
+  const lowerQuery = query.toLowerCase();
+  for (const field of fields) {
+    const value = record[field];
+    if (typeof value === 'string' && value.toLowerCase().includes(lowerQuery)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Full-text search across collections
 export async function searchKnowledge(input: z.infer<typeof SearchKnowledgeSchema>) {
   const pb = await getPocketBase();
@@ -38,66 +50,60 @@ export async function searchKnowledge(input: z.infer<typeof SearchKnowledgeSchem
     relevance: string;
   }> = [];
 
-  // Build filter for project
-  let projectFilter = '';
+  // Get project ID if specified
+  let projectId: string | null = null;
   if (input.project) {
     try {
       const project = await pb.collection('projects').getFirstListItem(`name="${input.project}"`);
-      projectFilter = `project="${project.id}"`;
+      projectId = project.id;
     } catch {
       // Project not found, continue without filter
     }
   }
 
-  // Build filter for tags
-  let tagsFilter = '';
-  if (input.tags && input.tags.length > 0) {
-    tagsFilter = input.tags.map(tag => `tags~"${tag}"`).join(' || ');
-  }
+  // Define search fields for each collection
+  const searchFields: Record<string, string[]> = {
+    observations: ['title', 'content'],
+    decisions: ['title', 'context', 'rationale'],
+    bugs_and_fixes: ['error_message', 'solution', 'root_cause'],
+    patterns: ['name', 'problem', 'solution'],
+    code_snippets: ['title', 'description', 'code'],
+  };
 
   for (const collectionName of collections) {
     try {
-      // Build search filter based on collection type
-      let searchFilter = '';
-      const query = input.query.toLowerCase();
-
-      switch (collectionName) {
-        case 'observations':
-          searchFilter = `title~"${query}" || content~"${query}"`;
-          break;
-        case 'decisions':
-          searchFilter = `title~"${query}" || context~"${query}" || rationale~"${query}"`;
-          break;
-        case 'bugs_and_fixes':
-          searchFilter = `error_message~"${query}" || solution~"${query}" || root_cause~"${query}"`;
-          break;
-        case 'patterns':
-          searchFilter = `name~"${query}" || problem~"${query}" || solution~"${query}"`;
-          break;
-        case 'code_snippets':
-          searchFilter = `title~"${query}" || description~"${query}" || code~"${query}"`;
-          break;
-      }
-
-      // Combine filters
-      const filters = [searchFilter];
-      if (projectFilter) filters.push(projectFilter);
-      if (tagsFilter) filters.push(`(${tagsFilter})`);
-
-      const finalFilter = filters.join(' && ');
-
-      const records = await pb.collection(collectionName).getList(1, limit, {
-        filter: finalFilter,
+      // Get all records and filter in code (avoid PocketBase OR filter issues)
+      const records = await pb.collection(collectionName).getFullList({
         sort: '-created',
       });
 
-      for (const record of records.items) {
+      const fields = searchFields[collectionName] || ['title', 'content'];
+
+      for (const record of records) {
+        // Filter by project if specified
+        if (projectId && record.project !== projectId) {
+          continue;
+        }
+
+        // Filter by tags if specified
+        if (input.tags && input.tags.length > 0) {
+          const recordTags = (record.tags as string[]) || [];
+          if (!input.tags.some(tag => recordTags.includes(tag))) {
+            continue;
+          }
+        }
+
+        // Check if record matches search query
+        if (!matchesQuery(record, fields, input.query)) {
+          continue;
+        }
+
         results.push({
           collection: collectionName,
-          id: record.id,
-          title: record.title || record.name || record.error_message?.slice(0, 50) || 'Untitled',
-          content: record.content || record.solution || record.code || record.rationale || '',
-          created: record.created,
+          id: record.id as string,
+          title: (record.title || record.name || (record.error_message as string)?.slice(0, 50) || 'Untitled') as string,
+          content: (record.content || record.solution || record.code || record.rationale || '') as string,
+          created: record.created as string,
           relevance: 'keyword-match',
         });
       }
@@ -125,7 +131,7 @@ const COLLECTION_MAP: Record<string, string> = {
   snippet: 'code_snippets',
 };
 
-// Semantic search using embeddings with pagination
+// Semantic search using embeddings
 export async function semanticSearch(input: z.infer<typeof SemanticSearchSchema>) {
   const pb = await getPocketBase();
   const threshold = input.threshold || 0.7;
@@ -136,28 +142,29 @@ export async function semanticSearch(input: z.infer<typeof SemanticSearchSchema>
     // Create embedding for the query
     const queryEmbedding = await createEmbedding(input.query);
 
-    // Build type filter
-    const typeFilter = sourceTypes.map(t => `source_type="${t}"`).join(' || ');
+    // Get all embeddings (use getFullList to avoid PocketBase pagination issues)
+    const allEmbeddings = await pb.collection('embeddings').getFullList();
 
-    // Paginated search with early exit
+    // Calculate similarities
     const scores: Array<{
       sourceType: string;
       sourceId: string;
       similarity: number;
     }> = [];
 
-    const batchSize = 200;
-    const maxPages = 10; // Safety limit
-    let page = 1;
+    for (const embedding of allEmbeddings) {
+      // Filter by source type in code
+      if (!sourceTypes.includes(embedding.source_type)) {
+        continue;
+      }
 
-    while (page <= maxPages) {
-      const batch = await pb.collection('embeddings').getList(page, batchSize, {
-        filter: typeFilter,
-        sort: '-created',
-      });
+      // Skip embeddings with null/empty vectors
+      if (!embedding.vector || !Array.isArray(embedding.vector) || embedding.vector.length === 0) {
+        logger.warn(`Skipping embedding ${embedding.id} with invalid vector`);
+        continue;
+      }
 
-      // Calculate similarities for this batch
-      for (const embedding of batch.items) {
+      try {
         const similarity = cosineSimilarity(queryEmbedding, embedding.vector as number[]);
         if (similarity >= threshold) {
           scores.push({
@@ -166,25 +173,9 @@ export async function semanticSearch(input: z.infer<typeof SemanticSearchSchema>
             similarity,
           });
         }
+      } catch (error) {
+        logger.warn(`Failed to calculate similarity for ${embedding.id}:`, error);
       }
-
-      // Early exit conditions
-      const highQualityResults = scores.filter(s => s.similarity >= 0.85);
-      if (highQualityResults.length >= limit * 2) {
-        logger.info(`Early exit: found ${highQualityResults.length} high-quality results`);
-        break;
-      }
-
-      // Check if we've processed all embeddings
-      if (page * batchSize >= batch.totalItems) {
-        break;
-      }
-
-      page++;
-    }
-
-    if (page > maxPages) {
-      logger.warn('Semantic search reached page limit');
     }
 
     // Sort by similarity (highest first)
