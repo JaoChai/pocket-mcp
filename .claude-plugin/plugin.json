@@ -18,6 +18,7 @@
   ],
   "mcpServers": ".mcp.json",
   "skills": "skills",
+  "hooks": "hooks",
   "userConfig": {
     "POCKETBASE_URL": {
       "type": "string",
