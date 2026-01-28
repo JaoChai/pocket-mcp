@@ -11,7 +11,7 @@ const {
   readStdin,
   log,
   getProjectName,
-} = require('./lib/pocketbase-client');
+} = require('./lib/pocketbase-client.cjs');
 
 const fs = require('fs');
 const path = require('path');

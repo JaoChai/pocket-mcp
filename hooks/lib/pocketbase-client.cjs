@@ -15,7 +15,7 @@ let authToken = null;
 async function authenticate() {
   if (authToken) return authToken;
 
-  const response = await fetch(`${POCKETBASE_URL}/api/admins/auth-with-password`, {
+  const response = await fetch(`${POCKETBASE_URL}/api/collections/_superusers/auth-with-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
