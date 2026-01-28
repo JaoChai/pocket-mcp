@@ -1,6 +1,6 @@
 ---
 description: สร้าง retrospective สรุปสิ่งที่เรียนรู้จาก session หรือช่วงเวลาที่กำหนด
-model: haiku
+model: opus
 ---
 
 # Reflect - Generate Retrospective
