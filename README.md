@@ -13,6 +13,8 @@ A Model Context Protocol (MCP) server that turns [PocketBase](https://pocketbase
 - **Knowledge Graph** - Link related entities together
 - **Retrospectives** - Generate insights from past sessions
 
+> **New to the tools?** Check out the [Complete Usage Guide](docs/USAGE_GUIDE.md) for detailed workflows and best practices.
+
 ---
 
 ## Quick Start
@@ -77,6 +79,23 @@ export POCKETBASE_PASSWORD="your-password"
 # Run setup
 npm run setup-collections
 ```
+
+---
+
+## Quick Reference: When to Use Which Tool
+
+| Event | Tools to Use |
+|-------|-------------|
+| Start your day | `get_pending_outcomes`, `get_lessons`, `get_project_context` |
+| Start new work | `create_session`, `create_task`, `update_task(in_progress)` |
+| Need to find info | `search_knowledge`, `semantic_search`, `find_workflow` |
+| Made a decision | `capture_decision` |
+| Fixed a bug | `capture_bug` |
+| Learned something new | `capture_observation` |
+| Wrote reusable code | `save_snippet` |
+| Finished work | `update_task(done)`, `generate_retrospective`, `end_session` |
+
+> See [Complete Usage Guide](docs/USAGE_GUIDE.md) for detailed workflows.
 
 ---
 
