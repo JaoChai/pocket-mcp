@@ -15,12 +15,15 @@ MCP Server สำหรับ Claude Code ที่เชื่อมต่อ�
 src/
 ├── index.ts           # Entry point
 ├── config.ts          # Configuration & env validation
-├── server.ts          # MCP Server with 14 tools
+├── server.ts          # MCP Server with 28 tools
 ├── pocketbase/
 │   ├── client.ts      # PocketBase connection
-│   └── collections.ts # Collection schemas
+│   └── collections.ts # Collection schemas (14 collections)
 ├── tools/
-│   ├── capture.ts     # capture_observation, capture_decision, capture_bug, save_snippet
+│   ├── session.ts     # create_session, end_session, get_current_session
+│   ├── tasks.ts       # create_task, update_task, get_tasks, get_project_progress, delete_task
+│   ├── capture.ts     # capture_observation, capture_decision, capture_bug, save_snippet, record_decision_outcome, get_pending_outcomes
+│   ├── workflow.ts    # save_workflow, find_workflow, get_workflow, record_workflow_execution
 │   ├── search.ts      # search_knowledge, semantic_search
 │   ├── context.ts     # get_project_context, get_preferences, save_preference
 │   ├── relate.ts      # link_entities, get_relations, suggest_relations
@@ -29,6 +32,19 @@ src/
     ├── embeddings.ts  # OpenAI embeddings & cosine similarity
     └── logger.ts      # Logging to stderr (STDIO protocol)
 ```
+
+## Tools by Category (28 total)
+| Category | Count | Tools |
+|----------|-------|-------|
+| Session | 3 | create_session, end_session, get_current_session |
+| Task | 5 | create_task, update_task, get_tasks, get_project_progress, delete_task |
+| Capture | 4 | capture_observation, capture_decision, capture_bug, save_snippet |
+| Outcome | 2 | record_decision_outcome, get_pending_outcomes |
+| Workflow | 4 | save_workflow, find_workflow, get_workflow, record_workflow_execution |
+| Search | 2 | search_knowledge, semantic_search |
+| Context | 3 | get_project_context, get_preferences, save_preference |
+| Relation | 3 | link_entities, get_relations, suggest_relations |
+| Reflection | 2 | generate_retrospective, get_lessons |
 
 ## Commands
 - `npm run build` - Build TypeScript
@@ -40,9 +56,10 @@ src/
 - **STDIO Protocol**: Never use console.log (stdout) - always use console.error (stderr)
 - **Error Handling**: Return `{ isError: true, content: [...] }` for tool errors
 - **Zod Validation**: All tool inputs are validated with Zod schemas
+- **Thai Timezone**: All timestamps are converted to Asia/Bangkok timezone
 
-## PocketBase Collections
-13 collections: projects, sessions, areas, observations, decisions, bugs_and_fixes, patterns, code_snippets, retrospectives, resources, relationships, user_preferences, embeddings
+## PocketBase Collections (14)
+projects, sessions, tasks, areas, observations, decisions, bugs_and_fixes, patterns, code_snippets, workflows, retrospectives, resources, relationships, user_preferences, embeddings
 
 ## Environment Variables
 - POCKETBASE_URL
