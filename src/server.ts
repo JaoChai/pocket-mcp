@@ -69,6 +69,19 @@ import {
   getCurrentSession,
 } from './tools/session.js';
 
+import {
+  CreateTaskSchema,
+  UpdateTaskSchema,
+  GetTasksSchema,
+  GetProjectProgressSchema,
+  DeleteTaskSchema,
+  createTask,
+  updateTask,
+  getTasks,
+  getProjectProgress,
+  deleteTask,
+} from './tools/tasks.js';
+
 export function createServer(): McpServer {
   const server = new McpServer({
     name: 'pocketbase-brain',
@@ -131,6 +144,110 @@ export function createServer(): McpServer {
         };
       } catch (error) {
         logger.error('get_current_session failed', error);
+        return {
+          content: [{ type: 'text', text: `Error: ${error}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ============================================
+  // TASK TOOLS
+  // ============================================
+
+  server.tool(
+    'create_task',
+    'Create a new task for tracking work progress',
+    CreateTaskSchema.shape,
+    async (args) => {
+      try {
+        const result = await createTask(CreateTaskSchema.parse(args));
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (error) {
+        logger.error('create_task failed', error);
+        return {
+          content: [{ type: 'text', text: `Error: ${error}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    'update_task',
+    'Update task status, priority, or other details',
+    UpdateTaskSchema.shape,
+    async (args) => {
+      try {
+        const result = await updateTask(UpdateTaskSchema.parse(args));
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (error) {
+        logger.error('update_task failed', error);
+        return {
+          content: [{ type: 'text', text: `Error: ${error}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    'get_tasks',
+    'Get list of tasks with optional filters (project, status, feature, priority)',
+    GetTasksSchema.shape,
+    async (args) => {
+      try {
+        const result = await getTasks(GetTasksSchema.parse(args));
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (error) {
+        logger.error('get_tasks failed', error);
+        return {
+          content: [{ type: 'text', text: `Error: ${error}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    'get_project_progress',
+    'Get project progress summary with completion stats, tasks by feature, and next up items',
+    GetProjectProgressSchema.shape,
+    async (args) => {
+      try {
+        const result = await getProjectProgress(GetProjectProgressSchema.parse(args));
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (error) {
+        logger.error('get_project_progress failed', error);
+        return {
+          content: [{ type: 'text', text: `Error: ${error}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    'delete_task',
+    'Delete or cancel a task',
+    DeleteTaskSchema.shape,
+    async (args) => {
+      try {
+        const result = await deleteTask(DeleteTaskSchema.parse(args));
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (error) {
+        logger.error('delete_task failed', error);
         return {
           content: [{ type: 'text', text: `Error: ${error}` }],
           isError: true,

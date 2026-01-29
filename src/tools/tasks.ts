@@ -1,0 +1,414 @@
+import { z } from 'zod';
+import { getPocketBase } from '../pocketbase/client.js';
+import { logger } from '../utils/logger.js';
+import { getActiveSessionId } from './session.js';
+
+// Helper function to convert UTC to Thai timezone (Asia/Bangkok)
+function toThaiTime(utcDateString: string | undefined | null): string {
+  if (!utcDateString) {
+    return new Date().toLocaleString('th-TH', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+  }
+
+  const date = new Date(utcDateString);
+
+  if (isNaN(date.getTime())) {
+    return new Date().toLocaleString('th-TH', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+  }
+
+  return date.toLocaleString('th-TH', {
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+}
+
+// Helper to find or create project
+async function getOrCreateProject(projectName?: string): Promise<string | null> {
+  if (!projectName) return null;
+
+  const pb = await getPocketBase();
+
+  try {
+    const existing = await pb.collection('projects').getFirstListItem(`name="${projectName}"`);
+    return existing.id;
+  } catch {
+    try {
+      const created = await pb.collection('projects').create({
+        name: projectName,
+        status: 'active',
+      });
+      logger.info(`Created new project: ${projectName}`);
+      return created.id;
+    } catch (error) {
+      logger.error('Failed to create project', error);
+      return null;
+    }
+  }
+}
+
+// ============================================
+// SCHEMA DEFINITIONS
+// ============================================
+
+export const CreateTaskSchema = z.object({
+  project: z.string().optional().describe('Project name'),
+  title: z.string().min(1).describe('Task title'),
+  description: z.string().optional().describe('Task description'),
+  feature: z.string().optional().describe('Feature group (e.g., "User Profile", "Auth")'),
+  priority: z.enum(['critical', 'high', 'medium', 'low']).optional().describe('Task priority'),
+  due_date: z.string().optional().describe('Due date (ISO format)'),
+  tags: z.array(z.string()).optional().describe('Tags for categorization'),
+});
+
+export const UpdateTaskSchema = z.object({
+  task_id: z.string().min(1).describe('Task ID to update'),
+  title: z.string().optional().describe('New title'),
+  description: z.string().optional().describe('New description'),
+  status: z.enum(['pending', 'in_progress', 'done', 'blocked', 'cancelled']).optional().describe('New status'),
+  priority: z.enum(['critical', 'high', 'medium', 'low']).optional().describe('New priority'),
+  blocked_reason: z.string().optional().describe('Reason if blocked'),
+  due_date: z.string().optional().describe('New due date'),
+  tags: z.array(z.string()).optional().describe('New tags'),
+});
+
+export const GetTasksSchema = z.object({
+  project: z.string().optional().describe('Filter by project name'),
+  status: z.enum(['pending', 'in_progress', 'done', 'blocked', 'cancelled']).optional().describe('Filter by status'),
+  feature: z.string().optional().describe('Filter by feature group'),
+  priority: z.enum(['critical', 'high', 'medium', 'low']).optional().describe('Filter by priority'),
+  limit: z.number().min(1).max(100).optional().describe('Maximum results (default: 50)'),
+});
+
+export const GetProjectProgressSchema = z.object({
+  project: z.string().min(1).describe('Project name'),
+  include_details: z.boolean().optional().describe('Include task details (default: true)'),
+});
+
+export const DeleteTaskSchema = z.object({
+  task_id: z.string().min(1).describe('Task ID to delete'),
+  soft_delete: z.boolean().optional().describe('Mark as cancelled instead of deleting (default: true)'),
+});
+
+// ============================================
+// TOOL IMPLEMENTATIONS
+// ============================================
+
+export async function createTask(input: z.infer<typeof CreateTaskSchema>) {
+  const pb = await getPocketBase();
+  const projectId = await getOrCreateProject(input.project);
+  const sessionId = getActiveSessionId();
+
+  try {
+    const record = await pb.collection('tasks').create({
+      session: sessionId,
+      project: projectId,
+      title: input.title,
+      description: input.description || '',
+      feature: input.feature || '',
+      status: 'pending',
+      priority: input.priority || 'medium',
+      due_date: input.due_date || null,
+      tags: input.tags || [],
+    });
+
+    logger.info(`Created task: ${input.title}`);
+
+    return {
+      success: true,
+      id: record.id,
+      title: input.title,
+      feature: input.feature || null,
+      priority: input.priority || 'medium',
+      created: toThaiTime(record.created),
+      message: `Task "${input.title}" created successfully`,
+    };
+  } catch (error) {
+    logger.error('Failed to create task', error);
+    throw error;
+  }
+}
+
+export async function updateTask(input: z.infer<typeof UpdateTaskSchema>) {
+  const pb = await getPocketBase();
+
+  try {
+    // Verify task exists
+    const existing = await pb.collection('tasks').getOne(input.task_id);
+
+    // Build update data
+    const updateData: Record<string, unknown> = {};
+
+    if (input.title !== undefined) updateData.title = input.title;
+    if (input.description !== undefined) updateData.description = input.description;
+    if (input.status !== undefined) {
+      updateData.status = input.status;
+      // Set completed_at when marking as done
+      if (input.status === 'done') {
+        updateData.completed_at = new Date().toISOString();
+      }
+    }
+    if (input.priority !== undefined) updateData.priority = input.priority;
+    if (input.blocked_reason !== undefined) updateData.blocked_reason = input.blocked_reason;
+    if (input.due_date !== undefined) updateData.due_date = input.due_date;
+    if (input.tags !== undefined) updateData.tags = input.tags;
+
+    const updated = await pb.collection('tasks').update(input.task_id, updateData);
+
+    logger.info(`Updated task: ${existing.title} -> status: ${input.status || existing.status}`);
+
+    return {
+      success: true,
+      id: updated.id,
+      title: updated.title,
+      status: updated.status,
+      updated: toThaiTime(updated.updated),
+      message: `Task "${updated.title}" updated successfully`,
+    };
+  } catch (error) {
+    logger.error('Failed to update task', error);
+    throw error;
+  }
+}
+
+export async function getTasks(input: z.infer<typeof GetTasksSchema>) {
+  const pb = await getPocketBase();
+  const limit = input.limit || 50;
+
+  try {
+    // Build filter
+    const filters: string[] = [];
+
+    if (input.project) {
+      try {
+        const project = await pb.collection('projects').getFirstListItem(`name="${input.project}"`);
+        filters.push(`project="${project.id}"`);
+      } catch {
+        return {
+          total: 0,
+          tasks: [],
+          message: `Project "${input.project}" not found`,
+        };
+      }
+    }
+
+    if (input.status) {
+      filters.push(`status="${input.status}"`);
+    }
+
+    if (input.feature) {
+      filters.push(`feature="${input.feature}"`);
+    }
+
+    if (input.priority) {
+      filters.push(`priority="${input.priority}"`);
+    }
+
+    const filter = filters.length > 0 ? filters.join(' && ') : '';
+
+    const tasks = await pb.collection('tasks').getList(1, limit, {
+      filter,
+      sort: '-created',
+      expand: 'project',
+    });
+
+    const taskList = tasks.items.map((t) => ({
+      id: t.id,
+      title: t.title,
+      description: t.description || null,
+      feature: t.feature || null,
+      status: t.status,
+      priority: t.priority,
+      project: t.expand?.project?.name || null,
+      created: toThaiTime(t.created),
+      completed_at: t.completed_at ? toThaiTime(t.completed_at) : null,
+      due_date: t.due_date || null,
+      blocked_reason: t.blocked_reason || null,
+    }));
+
+    logger.info(`Retrieved ${taskList.length} tasks`);
+
+    return {
+      total: tasks.totalItems,
+      showing: taskList.length,
+      tasks: taskList,
+    };
+  } catch (error) {
+    logger.error('Failed to get tasks', error);
+    throw error;
+  }
+}
+
+export async function getProjectProgress(input: z.infer<typeof GetProjectProgressSchema>) {
+  const pb = await getPocketBase();
+  const includeDetails = input.include_details !== false;
+
+  try {
+    // Find project
+    let projectId: string;
+    try {
+      const project = await pb.collection('projects').getFirstListItem(`name="${input.project}"`);
+      projectId = project.id;
+    } catch {
+      return {
+        success: false,
+        message: `Project "${input.project}" not found`,
+      };
+    }
+
+    // Get all tasks for this project
+    const allTasks = await pb.collection('tasks').getFullList({
+      filter: `project="${projectId}"`,
+      sort: '-created',
+    });
+
+    // Calculate stats
+    const stats = {
+      total: allTasks.length,
+      done: 0,
+      in_progress: 0,
+      pending: 0,
+      blocked: 0,
+      cancelled: 0,
+    };
+
+    const byFeature: Record<string, { total: number; done: number; pending: number; in_progress: number }> = {};
+    const recentCompleted: Array<{ id: string; title: string; completed_at: string }> = [];
+    const nextUp: Array<{ id: string; title: string; priority: string; feature: string | null }> = [];
+
+    for (const task of allTasks) {
+      // Count by status
+      switch (task.status) {
+        case 'done':
+          stats.done++;
+          if (task.completed_at) {
+            recentCompleted.push({
+              id: task.id,
+              title: task.title,
+              completed_at: toThaiTime(task.completed_at),
+            });
+          }
+          break;
+        case 'in_progress':
+          stats.in_progress++;
+          break;
+        case 'pending':
+          stats.pending++;
+          nextUp.push({
+            id: task.id,
+            title: task.title,
+            priority: task.priority || 'medium',
+            feature: task.feature || null,
+          });
+          break;
+        case 'blocked':
+          stats.blocked++;
+          break;
+        case 'cancelled':
+          stats.cancelled++;
+          break;
+      }
+
+      // Count by feature
+      const featureName = task.feature || 'Uncategorized';
+      if (!byFeature[featureName]) {
+        byFeature[featureName] = { total: 0, done: 0, pending: 0, in_progress: 0 };
+      }
+      byFeature[featureName].total++;
+      if (task.status === 'done') byFeature[featureName].done++;
+      if (task.status === 'pending') byFeature[featureName].pending++;
+      if (task.status === 'in_progress') byFeature[featureName].in_progress++;
+    }
+
+    // Sort by priority for next up
+    const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+    nextUp.sort((a, b) => (priorityOrder[a.priority as keyof typeof priorityOrder] || 2) - (priorityOrder[b.priority as keyof typeof priorityOrder] || 2));
+
+    // Calculate completion percentage
+    const completionPercent = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
+
+    const result: Record<string, unknown> = {
+      project: input.project,
+      completion_percent: completionPercent,
+      stats,
+      by_feature: byFeature,
+    };
+
+    if (includeDetails) {
+      result.recent_completed = recentCompleted.slice(0, 5);
+      result.next_up = nextUp.slice(0, 5);
+    }
+
+    logger.info(`Project progress for ${input.project}: ${completionPercent}% complete`);
+
+    return result;
+  } catch (error) {
+    logger.error('Failed to get project progress', error);
+    throw error;
+  }
+}
+
+export async function deleteTask(input: z.infer<typeof DeleteTaskSchema>) {
+  const pb = await getPocketBase();
+  const softDelete = input.soft_delete !== false;
+
+  try {
+    // Verify task exists
+    const existing = await pb.collection('tasks').getOne(input.task_id);
+
+    if (softDelete) {
+      // Mark as cancelled
+      await pb.collection('tasks').update(input.task_id, {
+        status: 'cancelled',
+      });
+
+      logger.info(`Soft deleted (cancelled) task: ${existing.title}`);
+
+      return {
+        success: true,
+        id: input.task_id,
+        title: existing.title,
+        action: 'cancelled',
+        message: `Task "${existing.title}" marked as cancelled`,
+      };
+    } else {
+      // Hard delete
+      await pb.collection('tasks').delete(input.task_id);
+
+      logger.info(`Deleted task: ${existing.title}`);
+
+      return {
+        success: true,
+        id: input.task_id,
+        title: existing.title,
+        action: 'deleted',
+        message: `Task "${existing.title}" deleted permanently`,
+      };
+    }
+  } catch (error) {
+    logger.error('Failed to delete task', error);
+    throw error;
+  }
+}

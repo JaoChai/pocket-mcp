@@ -59,6 +59,7 @@ async function setupCollections() {
     'relationships',
     'user_preferences',
     'embeddings',
+    'tasks',
   ];
 
   // First pass: Create collections without relations
@@ -177,6 +178,11 @@ async function setupCollections() {
     { collection: 'relationships', field: 'source_id' },
     { collection: 'relationships', field: 'target_id' },
     { collection: 'embeddings', field: 'source_id' },
+    // Tasks collection indexes
+    { collection: 'tasks', field: 'project' },
+    { collection: 'tasks', field: 'status' },
+    { collection: 'tasks', field: 'priority' },
+    { collection: 'tasks', field: 'feature' },
   ];
 
   for (const indexDef of indexDefinitions) {

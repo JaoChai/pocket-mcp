@@ -202,11 +202,30 @@ export const COLLECTIONS = {
     name: 'embeddings',
     type: 'base',
     schema: [
-      { name: 'source_type', type: 'select', required: true, options: { values: ['observation', 'decision', 'bug', 'pattern', 'snippet', 'resource', 'workflow'] } },
+      { name: 'source_type', type: 'select', required: true, options: { values: ['observation', 'decision', 'bug', 'pattern', 'snippet', 'resource', 'workflow', 'task'] } },
       { name: 'source_id', type: 'text', required: true },
       { name: 'content_hash', type: 'text', required: true },
       { name: 'vector', type: 'json', required: true },
       { name: 'model', type: 'text', required: true },
+    ],
+  },
+
+  // Task Tracking Collection
+  tasks: {
+    name: 'tasks',
+    type: 'base',
+    schema: [
+      { name: 'session', type: 'relation', options: { collectionId: 'sessions', maxSelect: 1 } },
+      { name: 'project', type: 'relation', options: { collectionId: 'projects', maxSelect: 1 } },
+      { name: 'title', type: 'text', required: true },
+      { name: 'description', type: 'text' },
+      { name: 'feature', type: 'text' },
+      { name: 'status', type: 'select', required: true, options: { values: ['pending', 'in_progress', 'done', 'blocked', 'cancelled'] } },
+      { name: 'priority', type: 'select', options: { values: ['critical', 'high', 'medium', 'low'] } },
+      { name: 'due_date', type: 'date' },
+      { name: 'completed_at', type: 'date' },
+      { name: 'blocked_reason', type: 'text' },
+      { name: 'tags', type: 'json' },
     ],
   },
 } as const;
