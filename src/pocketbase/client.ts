@@ -12,7 +12,8 @@ export async function getPocketBase(): Promise<PocketBase> {
 
   if (!isAuthenticated) {
     try {
-      await pb.admins.authWithPassword(
+      // PocketBase v0.23+ uses _superusers collection instead of pb.admins
+      await pb.collection('_superusers').authWithPassword(
         config.pocketbase.email,
         config.pocketbase.password
       );

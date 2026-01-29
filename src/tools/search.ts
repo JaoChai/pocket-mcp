@@ -16,11 +16,15 @@ export const SearchKnowledgeSchema = z.object({
 
 export const SemanticSearchSchema = z.object({
   query: z.string().min(1).describe('Natural language query'),
-  collections: z.array(z.enum(['observation', 'decision', 'bug', 'pattern', 'snippet']))
+  collections: z.array(z.enum(['observation', 'decision', 'bug', 'pattern', 'snippet', 'workflow']))
     .optional()
     .describe('Source types to search (default: all)'),
   threshold: z.number().min(0).max(1).optional().describe('Similarity threshold (default: 0.7)'),
   limit: z.number().min(1).max(20).optional().describe('Maximum results (default: 5)'),
+  // Recency weighting options
+  recency_weight: z.number().min(0).max(1).optional().describe('Weight for recency (0=ignore, 1=strong, default: 0.3)'),
+  importance_weight: z.number().min(0).max(1).optional().describe('Weight for importance (default: 0.2)'),
+  decay_days: z.number().min(1).max(365).optional().describe('Days for recency decay (default: 30)'),
 });
 
 // Helper function to check if record matches search query
@@ -129,14 +133,21 @@ const COLLECTION_MAP: Record<string, string> = {
   bug: 'bugs_and_fixes',
   pattern: 'patterns',
   snippet: 'code_snippets',
+  workflow: 'workflows',
 };
 
-// Semantic search using embeddings
+// Semantic search using embeddings with recency weighting
 export async function semanticSearch(input: z.infer<typeof SemanticSearchSchema>) {
   const pb = await getPocketBase();
   const threshold = input.threshold || 0.7;
   const limit = input.limit || 5;
-  const sourceTypes = input.collections || ['observation', 'decision', 'bug', 'pattern', 'snippet'];
+  const sourceTypes = input.collections || ['observation', 'decision', 'bug', 'pattern', 'snippet', 'workflow'];
+
+  // Recency weighting parameters
+  const recencyWeight = input.recency_weight ?? 0.3;
+  const importanceWeight = input.importance_weight ?? 0.2;
+  const decayDays = input.decay_days ?? 30;
+  const similarityWeight = Math.max(0, 1 - recencyWeight - importanceWeight);
 
   try {
     // Create embedding for the query
@@ -145,12 +156,18 @@ export async function semanticSearch(input: z.infer<typeof SemanticSearchSchema>
     // Get all embeddings (use getFullList to avoid PocketBase pagination issues)
     const allEmbeddings = await pb.collection('embeddings').getFullList();
 
-    // Calculate similarities
+    // Calculate similarities and fetch records for scoring
     const scores: Array<{
       sourceType: string;
       sourceId: string;
       similarity: number;
+      recencyScore: number;
+      importanceScore: number;
+      finalScore: number;
+      created: string;
     }> = [];
+
+    const now = Date.now();
 
     for (const embedding of allEmbeddings) {
       // Filter by source type in code
@@ -160,26 +177,68 @@ export async function semanticSearch(input: z.infer<typeof SemanticSearchSchema>
 
       // Skip embeddings with null/empty vectors
       if (!embedding.vector || !Array.isArray(embedding.vector) || embedding.vector.length === 0) {
-        logger.warn(`Skipping embedding ${embedding.id} with invalid vector`);
         continue;
       }
 
       try {
         const similarity = cosineSimilarity(queryEmbedding, embedding.vector as number[]);
-        if (similarity >= threshold) {
-          scores.push({
-            sourceType: embedding.source_type,
-            sourceId: embedding.source_id,
-            similarity,
-          });
+        if (similarity < threshold) {
+          continue;
         }
+
+        // Fetch source record for metadata
+        const collectionName = COLLECTION_MAP[embedding.source_type];
+        if (!collectionName) continue;
+
+        let record;
+        try {
+          record = await pb.collection(collectionName).getOne(embedding.source_id);
+        } catch {
+          continue; // Record deleted
+        }
+
+        // Calculate recency score (exponential decay)
+        const createdDate = new Date(record.created).getTime();
+        const daysOld = (now - createdDate) / (1000 * 60 * 60 * 24);
+        const recencyScore = Math.exp(-daysOld / decayDays);
+
+        // Calculate importance score (normalize to 0-1)
+        let importanceScore = 0.5; // Default middle importance
+        if (record.importance !== undefined) {
+          importanceScore = (record.importance - 1) / 4; // Convert 1-5 to 0-1
+        } else if (record.strength !== undefined) {
+          importanceScore = (record.strength - 1) / 4;
+        } else if (embedding.source_type === 'decision') {
+          // Decisions with outcomes are more important
+          importanceScore = record.outcome ? 0.8 : 0.5;
+        } else if (embedding.source_type === 'workflow') {
+          // Frequently executed workflows are more important
+          const execCount = record.execution_count || 0;
+          importanceScore = Math.min(1, 0.3 + (execCount * 0.1));
+        }
+
+        // Calculate final weighted score
+        const finalScore =
+          similarity * similarityWeight +
+          recencyScore * recencyWeight +
+          importanceScore * importanceWeight;
+
+        scores.push({
+          sourceType: embedding.source_type,
+          sourceId: embedding.source_id,
+          similarity,
+          recencyScore: Math.round(recencyScore * 100) / 100,
+          importanceScore: Math.round(importanceScore * 100) / 100,
+          finalScore: Math.round(finalScore * 100) / 100,
+          created: record.created,
+        });
       } catch (error) {
-        logger.warn(`Failed to calculate similarity for ${embedding.id}:`, error);
+        logger.warn(`Failed to process embedding ${embedding.id}:`, error);
       }
     }
 
-    // Sort by similarity (highest first)
-    scores.sort((a, b) => b.similarity - a.similarity);
+    // Sort by final weighted score (highest first)
+    scores.sort((a, b) => b.finalScore - a.finalScore);
 
     // Fetch actual records for top results
     const results: Array<{
@@ -188,6 +247,10 @@ export async function semanticSearch(input: z.infer<typeof SemanticSearchSchema>
       title: string;
       content: string;
       similarity: number;
+      recency_score: number;
+      importance_score: number;
+      final_score: number;
+      created: string;
     }> = [];
 
     for (const score of scores.slice(0, limit)) {
@@ -201,8 +264,12 @@ export async function semanticSearch(input: z.infer<typeof SemanticSearchSchema>
           type: score.sourceType,
           id: record.id,
           title: record.title || record.name || record.error_message?.slice(0, 50) || 'Untitled',
-          content: (record.content || record.solution || record.code || record.rationale || '').slice(0, 300),
+          content: (record.content || record.solution || record.code || record.rationale || record.description || '').slice(0, 300),
           similarity: Math.round(score.similarity * 100) / 100,
+          recency_score: score.recencyScore,
+          importance_score: score.importanceScore,
+          final_score: score.finalScore,
+          created: score.created,
         });
       } catch {
         // Record might have been deleted
@@ -212,6 +279,12 @@ export async function semanticSearch(input: z.infer<typeof SemanticSearchSchema>
 
     return {
       query: input.query,
+      weights: {
+        similarity: Math.round(similarityWeight * 100) / 100,
+        recency: recencyWeight,
+        importance: importanceWeight,
+        decay_days: decayDays,
+      },
       total: results.length,
       results,
     };

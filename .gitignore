@@ -29,3 +29,10 @@ coverage/
 # Temporary files
 *.tmp
 *.temp
+
+# Credentials (never commit!)
+credentials.env
+*.credentials
+
+# Hooks cache
+hooks/

@@ -7,11 +7,26 @@ import {
   CaptureDecisionSchema,
   CaptureBugSchema,
   SaveSnippetSchema,
+  RecordDecisionOutcomeSchema,
+  GetPendingOutcomesSchema,
   captureObservation,
   captureDecision,
   captureBug,
   saveSnippet,
+  recordDecisionOutcome,
+  getPendingOutcomes,
 } from './tools/capture.js';
+
+import {
+  SaveWorkflowSchema,
+  FindWorkflowSchema,
+  GetWorkflowSchema,
+  RecordWorkflowExecutionSchema,
+  saveWorkflow,
+  findWorkflow,
+  getWorkflow,
+  recordWorkflowExecution,
+} from './tools/workflow.js';
 
 import {
   SearchKnowledgeSchema,
@@ -200,6 +215,134 @@ export function createServer(): McpServer {
         };
       } catch (error) {
         logger.error('save_snippet failed', error);
+        return {
+          content: [{ type: 'text', text: `Error: ${error}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ============================================
+  // OUTCOME TRACKING TOOLS
+  // ============================================
+
+  server.tool(
+    'record_decision_outcome',
+    'Record what actually happened after a decision was made',
+    RecordDecisionOutcomeSchema.shape,
+    async (args) => {
+      try {
+        const result = await recordDecisionOutcome(RecordDecisionOutcomeSchema.parse(args));
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (error) {
+        logger.error('record_decision_outcome failed', error);
+        return {
+          content: [{ type: 'text', text: `Error: ${error}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    'get_pending_outcomes',
+    'Find decisions that need outcome tracking',
+    GetPendingOutcomesSchema.shape,
+    async (args) => {
+      try {
+        const result = await getPendingOutcomes(GetPendingOutcomesSchema.parse(args));
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (error) {
+        logger.error('get_pending_outcomes failed', error);
+        return {
+          content: [{ type: 'text', text: `Error: ${error}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // ============================================
+  // WORKFLOW TOOLS
+  // ============================================
+
+  server.tool(
+    'save_workflow',
+    'Save a reusable workflow/procedure',
+    SaveWorkflowSchema.shape,
+    async (args) => {
+      try {
+        const result = await saveWorkflow(SaveWorkflowSchema.parse(args));
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (error) {
+        logger.error('save_workflow failed', error);
+        return {
+          content: [{ type: 'text', text: `Error: ${error}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    'find_workflow',
+    'Find a workflow by describing what you want to do',
+    FindWorkflowSchema.shape,
+    async (args) => {
+      try {
+        const result = await findWorkflow(FindWorkflowSchema.parse(args));
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (error) {
+        logger.error('find_workflow failed', error);
+        return {
+          content: [{ type: 'text', text: `Error: ${error}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    'get_workflow',
+    'Get full details of a workflow including all steps',
+    GetWorkflowSchema.shape,
+    async (args) => {
+      try {
+        const result = await getWorkflow(GetWorkflowSchema.parse(args));
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (error) {
+        logger.error('get_workflow failed', error);
+        return {
+          content: [{ type: 'text', text: `Error: ${error}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    'record_workflow_execution',
+    'Record that a workflow was executed',
+    RecordWorkflowExecutionSchema.shape,
+    async (args) => {
+      try {
+        const result = await recordWorkflowExecution(RecordWorkflowExecutionSchema.parse(args));
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (error) {
+        logger.error('record_workflow_execution failed', error);
         return {
           content: [{ type: 'text', text: `Error: ${error}` }],
           isError: true,

@@ -69,6 +69,8 @@ export const COLLECTIONS = {
       { name: 'rationale', type: 'text', required: true },
       { name: 'outcome', type: 'text' },
       { name: 'would_do_again', type: 'bool' },
+      { name: 'outcome_recorded_at', type: 'date' },
+      { name: 'outcome_notes', type: 'text' },
       { name: 'tags', type: 'json' },
     ],
   },
@@ -107,6 +109,25 @@ export const COLLECTIONS = {
   },
 
   // Memory Collections - Procedural
+  workflows: {
+    name: 'workflows',
+    type: 'base',
+    schema: [
+      { name: 'project', type: 'relation', options: { collectionId: 'projects', maxSelect: 1 } },
+      { name: 'name', type: 'text', required: true },
+      { name: 'description', type: 'text' },
+      { name: 'trigger', type: 'text', required: true },
+      { name: 'steps', type: 'json', required: true },
+      { name: 'tools_used', type: 'json' },
+      { name: 'estimated_duration', type: 'number' },
+      { name: 'success_criteria', type: 'text' },
+      { name: 'tags', type: 'json' },
+      { name: 'execution_count', type: 'number' },
+      { name: 'last_executed', type: 'date' },
+      { name: 'avg_duration', type: 'number' },
+    ],
+  },
+
   code_snippets: {
     name: 'code_snippets',
     type: 'base',
@@ -156,10 +177,10 @@ export const COLLECTIONS = {
     name: 'relationships',
     type: 'base',
     schema: [
-      { name: 'source_type', type: 'select', required: true, options: { values: ['project', 'observation', 'decision', 'bug', 'pattern', 'snippet', 'resource'] } },
+      { name: 'source_type', type: 'select', required: true, options: { values: ['project', 'observation', 'decision', 'bug', 'pattern', 'snippet', 'resource', 'workflow'] } },
       { name: 'source_id', type: 'text', required: true },
       { name: 'relation', type: 'select', required: true, options: { values: ['uses', 'caused', 'fixed_by', 'led_to', 'related_to', 'depends_on', 'inspired_by'] } },
-      { name: 'target_type', type: 'select', required: true, options: { values: ['project', 'observation', 'decision', 'bug', 'pattern', 'snippet', 'resource'] } },
+      { name: 'target_type', type: 'select', required: true, options: { values: ['project', 'observation', 'decision', 'bug', 'pattern', 'snippet', 'resource', 'workflow'] } },
       { name: 'target_id', type: 'text', required: true },
       { name: 'context', type: 'text' },
     ],
@@ -181,7 +202,7 @@ export const COLLECTIONS = {
     name: 'embeddings',
     type: 'base',
     schema: [
-      { name: 'source_type', type: 'select', required: true, options: { values: ['observation', 'decision', 'bug', 'pattern', 'snippet', 'resource'] } },
+      { name: 'source_type', type: 'select', required: true, options: { values: ['observation', 'decision', 'bug', 'pattern', 'snippet', 'resource', 'workflow'] } },
       { name: 'source_id', type: 'text', required: true },
       { name: 'content_hash', type: 'text', required: true },
       { name: 'vector', type: 'json', required: true },

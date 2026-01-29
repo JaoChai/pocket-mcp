@@ -251,23 +251,29 @@ async function calculateMetrics(
 export async function getLessons(input: z.infer<typeof GetLessonsSchema>) {
   const pb = await getPocketBase();
   const limit = input.limit || 10;
+  let filter: string | undefined = undefined;
 
   try {
-    let filter = '';
 
     if (input.project) {
       try {
         const project = await pb.collection('projects').getFirstListItem(`name="${input.project}"`);
         filter = `project="${project.id}"`;
       } catch {
-        // Project not found
+        // Project not found, continue without filter
       }
     }
 
-    const retros = await pb.collection('retrospectives').getList(1, limit, {
-      ...(filter && { filter }),
+    const options: { sort: string; filter?: string; expand?: string } = {
       sort: '-created',
-    });
+      expand: 'project',
+    };
+
+    if (filter) {
+      options.filter = filter;
+    }
+
+    const retros = await pb.collection('retrospectives').getList(1, limit, options);
 
     // Aggregate all lessons
     const allLessons: Array<{
@@ -296,7 +302,11 @@ export async function getLessons(input: z.infer<typeof GetLessonsSchema>) {
       lessons: allLessons,
     };
   } catch (error) {
-    logger.error('Failed to get lessons', error);
-    throw error;
+    logger.error('Failed to get lessons', { error, filter, limit });
+    return {
+      total: 0,
+      lessons: [],
+      message: error instanceof Error ? error.message : 'Failed to retrieve lessons',
+    };
   }
 }

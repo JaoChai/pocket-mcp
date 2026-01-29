@@ -5,8 +5,36 @@ import { createEmbedding, hashContent } from '../utils/embeddings.js';
 import { getActiveSessionId } from './session.js';
 
 // Helper function to convert UTC to Thai timezone (Asia/Bangkok)
-function toThaiTime(utcDateString: string): string {
+function toThaiTime(utcDateString: string | undefined | null): string {
+  if (!utcDateString) {
+    return new Date().toLocaleString('th-TH', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+  }
+
   const date = new Date(utcDateString);
+
+  // Check if date is valid
+  if (isNaN(date.getTime())) {
+    return new Date().toLocaleString('th-TH', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+  }
+
   return date.toLocaleString('th-TH', {
     timeZone: 'Asia/Bangkok',
     year: 'numeric',
@@ -259,6 +287,115 @@ export async function saveSnippet(input: z.infer<typeof SaveSnippetSchema>) {
     };
   } catch (error) {
     logger.error('Failed to save snippet', error);
+    throw error;
+  }
+}
+
+// ============================================
+// OUTCOME TRACKING
+// ============================================
+
+export const RecordDecisionOutcomeSchema = z.object({
+  decision_id: z.string().min(1).describe('ID of the decision to update'),
+  outcome: z.string().min(1).describe('What actually happened'),
+  would_do_again: z.boolean().describe('Would you make the same decision?'),
+  outcome_notes: z.string().optional().describe('Additional notes or learnings'),
+});
+
+export const GetPendingOutcomesSchema = z.object({
+  project: z.string().optional().describe('Filter by project name'),
+  days_old: z.number().min(1).max(90).optional().describe('Only decisions older than N days (default: 7)'),
+  limit: z.number().min(1).max(20).optional().describe('Maximum results (default: 10)'),
+});
+
+export async function recordDecisionOutcome(input: z.infer<typeof RecordDecisionOutcomeSchema>) {
+  const pb = await getPocketBase();
+
+  try {
+    // Verify decision exists
+    const decision = await pb.collection('decisions').getOne(input.decision_id);
+
+    // Update with outcome
+    const updated = await pb.collection('decisions').update(input.decision_id, {
+      outcome: input.outcome,
+      would_do_again: input.would_do_again,
+      outcome_recorded_at: new Date().toISOString(),
+      outcome_notes: input.outcome_notes || '',
+    });
+
+    // Log if decision was marked as "would not do again"
+    if (!input.would_do_again) {
+      logger.info(`Decision "${decision.title}" marked as would NOT do again - consider review`);
+    }
+
+    logger.info(`Recorded outcome for decision: ${decision.title}`);
+
+    return {
+      success: true,
+      id: updated.id,
+      title: decision.title,
+      outcome_recorded_at: toThaiTime(updated.outcome_recorded_at),
+      would_do_again: input.would_do_again,
+      message: `Outcome recorded for decision "${decision.title}"`,
+    };
+  } catch (error) {
+    logger.error('Failed to record decision outcome', error);
+    throw error;
+  }
+}
+
+export async function getPendingOutcomes(input: z.infer<typeof GetPendingOutcomesSchema>) {
+  const pb = await getPocketBase();
+  const daysOld = input.days_old || 7;
+  const limit = input.limit || 10;
+
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+
+  try {
+    // Build filter - decisions without outcome that are older than cutoff
+    // PocketBase: use outcome="" for empty text field (no spaces around operators)
+    let filter = `outcome="" && created<="${cutoffDate.toISOString()}"`;
+
+    if (input.project) {
+      try {
+        const project = await pb.collection('projects').getFirstListItem(`name="${input.project}"`);
+        filter += ` && project="${project.id}"`;
+      } catch {
+        // Project not found, return empty
+        return {
+          total: 0,
+          pending_outcomes: [],
+          message: `Project "${input.project}" not found`,
+        };
+      }
+    }
+
+    const decisions = await pb.collection('decisions').getList(1, limit, {
+      filter,
+      sort: 'created', // oldest first
+      expand: 'project',
+    });
+
+    const pendingOutcomes = decisions.items.map((d) => ({
+      id: d.id,
+      title: d.title,
+      chosen: d.chosen,
+      project: d.expand?.project?.name || null,
+      created: toThaiTime(d.created),
+      days_since: Math.floor((Date.now() - new Date(d.created).getTime()) / (1000 * 60 * 60 * 24)),
+    }));
+
+    logger.info(`Found ${decisions.totalItems} decisions pending outcome tracking`);
+
+    return {
+      total: decisions.totalItems,
+      showing: pendingOutcomes.length,
+      days_old_filter: daysOld,
+      pending_outcomes: pendingOutcomes,
+    };
+  } catch (error) {
+    logger.error('Failed to get pending outcomes', error);
     throw error;
   }
 }
