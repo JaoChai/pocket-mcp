@@ -9,11 +9,11 @@ export function createServer(): McpServer {
     version: '1.0.0',
   });
 
-  // Register all tools with the registry and apply to server
+  // Register all tools upfront (MCP protocol requires all tools at startup)
   registry.registerAll(allTools);
   registry.applyToServer(server);
 
-  logger.info(`MCP Server created with ${allTools.length} tools registered`);
+  logger.info(`MCP Server created with ${allTools.length} tools registered.`);
 
   return server;
 }

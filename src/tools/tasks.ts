@@ -5,57 +5,58 @@ import { logger } from '../utils/logger.js';
 import { getActiveSessionId } from './session.js';
 import { toThaiTime, nowISO } from '../utils/date.js';
 import { getOrCreateProject } from '../utils/project.js';
+import {
+  CommonFields,
+  PriorityEnum,
+  TaskStatusEnum,
+  ProjectEntityBase,
+  FieldSelectionBase,
+} from '../schemas/index.js';
+import { pickFields, DefaultFields } from '../utils/field-picker.js';
 
 // ============================================
 // SCHEMA DEFINITIONS
 // ============================================
 
-const CreateTaskSchema = z.object({
-  project: z.string().optional().describe('Project name'),
-  title: z.string().min(1).describe('Task title'),
-  description: z.string().optional().describe('Task description'),
-  feature: z.string().optional().describe('Feature group (e.g., "User Profile", "Auth")'),
-  priority: z.enum(['critical', 'high', 'medium', 'low']).optional().describe('Task priority'),
-  due_date: z.string().optional().describe('Due date (ISO format)'),
-  tags: z.array(z.string()).optional().describe('Tags for categorization'),
+const CreateTaskSchema = ProjectEntityBase.extend({
+  title: CommonFields.title,
+  description: CommonFields.description,
+  feature: CommonFields.feature,
+  priority: CommonFields.priority,
+  due_date: CommonFields.dueDate,
 });
 
 const UpdateTaskSchema = z.object({
-  task_id: z.string().min(1).describe('Task ID to update'),
-  title: z.string().optional().describe('New title'),
-  description: z.string().optional().describe('New description'),
-  status: z
-    .enum(['pending', 'in_progress', 'done', 'blocked', 'cancelled'])
-    .optional()
-    .describe('New status'),
-  priority: z.enum(['critical', 'high', 'medium', 'low']).optional().describe('New priority'),
-  blocked_reason: z.string().optional().describe('Reason if blocked'),
-  due_date: z.string().optional().describe('New due date'),
-  tags: z.array(z.string()).optional().describe('New tags'),
+  task_id: CommonFields.taskId,
+  title: CommonFields.titleOptional,
+  description: CommonFields.description,
+  status: TaskStatusEnum.optional().describe('New status'),
+  priority: CommonFields.priority,
+  blocked_reason: CommonFields.blockedReason,
+  due_date: CommonFields.dueDate,
+  tags: CommonFields.tags,
 });
 
 const GetTasksSchema = z.object({
-  project: z.string().optional().describe('Filter by project name'),
-  status: z
-    .enum(['pending', 'in_progress', 'done', 'blocked', 'cancelled'])
+  project: CommonFields.project,
+  status: TaskStatusEnum.optional().describe('Filter by status'),
+  feature: CommonFields.feature,
+  priority: CommonFields.priority,
+  limit: CommonFields.limitMedium,
+  fields: z
+    .array(z.string())
     .optional()
-    .describe('Filter by status'),
-  feature: z.string().optional().describe('Filter by feature group'),
-  priority: z.enum(['critical', 'high', 'medium', 'low']).optional().describe('Filter by priority'),
-  limit: z.number().min(1).max(100).optional().describe('Maximum results (default: 50)'),
+    .describe('Fields to return. Default: ["id", "title", "status", "priority", "created"]'),
 });
 
 const GetProjectProgressSchema = z.object({
-  project: z.string().min(1).describe('Project name'),
-  include_details: z.boolean().optional().describe('Include task details (default: true)'),
+  project: CommonFields.projectRequired,
+  include_details: CommonFields.includeDetails,
 });
 
 const DeleteTaskSchema = z.object({
-  task_id: z.string().min(1).describe('Task ID to delete'),
-  soft_delete: z
-    .boolean()
-    .optional()
-    .describe('Mark as cancelled instead of deleting (default: true)'),
+  task_id: CommonFields.taskId,
+  soft_delete: CommonFields.softDelete,
 });
 
 // ============================================
@@ -185,7 +186,8 @@ export const getTasks = defineTool({
       sort: '-created',
     });
 
-    const taskList = tasks.items.map((t) => ({
+    const fields = input.fields || DefaultFields.task;
+    const allTasks = tasks.items.map((t) => ({
       id: t.id,
       title: t.title,
       description: t.description || null,
@@ -197,13 +199,15 @@ export const getTasks = defineTool({
       due_date: t.due_date || null,
       blocked_reason: t.blocked_reason || null,
     }));
+    const taskList = pickFields(allTasks, fields) as typeof allTasks;
 
-    logger.info(`Retrieved ${taskList.length} tasks`);
+    logger.info(`Retrieved ${taskList.length} tasks with fields: ${fields.join(', ')}`);
 
     return {
       total: tasks.totalItems,
       showing: taskList.length,
       tasks: taskList,
+      fields, // Echo back for clarity
     };
   },
 });

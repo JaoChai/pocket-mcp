@@ -6,75 +6,65 @@ import { saveEmbeddingAsync } from '../utils/embeddings.js';
 import { getActiveSessionId } from './session.js';
 import { toThaiTime, daysSince, daysAgo } from '../utils/date.js';
 import { getOrCreateProject } from '../utils/project.js';
+import {
+  CommonFields,
+  ProjectEntityBase,
+  ObservationTypeEnum,
+  ObservationCategoryEnum,
+  ErrorTypeEnum,
+  LanguageEnum,
+  Validations,
+} from '../schemas/index.js';
 
 // ============================================
 // SCHEMA DEFINITIONS
 // ============================================
 
-const CaptureObservationSchema = z.object({
-  project: z.string().optional().describe('Project name or ID'),
-  type: z.enum(['discovery', 'pattern', 'insight', 'note']).describe('Type of observation'),
-  category: z
-    .enum(['architecture', 'code', 'performance', 'security', 'testing', 'devops', 'other'])
-    .optional(),
-  title: z.string().min(1).describe('Short title for the observation'),
-  content: z.string().min(1).describe('Detailed content of the observation'),
-  files: z.array(z.string()).optional().describe('Related file paths'),
-  tags: z.array(z.string()).optional().describe('Tags for categorization'),
-  importance: z.number().min(1).max(5).optional().describe('Importance level 1-5'),
+const CaptureObservationSchema = ProjectEntityBase.extend({
+  type: ObservationTypeEnum,
+  category: ObservationCategoryEnum.optional(),
+  title: CommonFields.title,
+  content: CommonFields.content,
+  files: CommonFields.files,
+  importance: CommonFields.importance,
 });
 
-const CaptureDecisionSchema = z.object({
-  project: z.string().optional().describe('Project name or ID'),
-  title: z.string().min(1).describe('Decision title'),
+const CaptureDecisionSchema = ProjectEntityBase.extend({
+  title: CommonFields.title,
   context: z.string().min(1).describe('Context and problem being solved'),
   options: z.array(z.string()).optional().describe('Options that were considered'),
-  chosen: z.string().min(1).describe('The option that was chosen'),
-  rationale: z.string().min(1).describe('Reasoning for the decision'),
-  tags: z.array(z.string()).optional(),
+  chosen: Validations.nonEmptyString.describe('The option that was chosen'),
+  rationale: CommonFields.rationale,
 });
 
-const CaptureBugSchema = z.object({
-  project: z.string().optional().describe('Project name or ID'),
-  error_type: z
-    .enum(['runtime', 'compile', 'logic', 'performance', 'security', 'other'])
-    .describe('Type of error'),
-  error_message: z.string().min(1).describe('The error message'),
+const CaptureBugSchema = ProjectEntityBase.extend({
+  error_type: ErrorTypeEnum,
+  error_message: CommonFields.errorMessage,
   root_cause: z.string().optional().describe('Root cause of the bug'),
-  solution: z.string().min(1).describe('How the bug was fixed'),
+  solution: Validations.nonEmptyString.describe('How the bug was fixed'),
   prevention: z.string().optional().describe('How to prevent this in the future'),
-  files_affected: z.array(z.string()).optional().describe('Files that were affected'),
-  tags: z.array(z.string()).optional(),
+  files_affected: CommonFields.files,
 });
 
-const SaveSnippetSchema = z.object({
-  project: z.string().optional().describe('Project name or ID'),
-  title: z.string().min(1).describe('Snippet title'),
-  language: z
-    .enum(['typescript', 'javascript', 'python', 'go', 'rust', 'java', 'sql', 'bash', 'other'])
-    .describe('Programming language'),
-  code: z.string().min(1).describe('The code snippet'),
-  description: z.string().optional().describe('Description of what the snippet does'),
+const SaveSnippetSchema = ProjectEntityBase.extend({
+  title: CommonFields.title,
+  language: LanguageEnum,
+  code: Validations.nonEmptyString.describe('The code snippet'),
+  description: CommonFields.description,
   use_cases: z.array(z.string()).optional().describe('When to use this snippet'),
-  tags: z.array(z.string()).optional(),
 });
 
 const RecordDecisionOutcomeSchema = z.object({
-  decision_id: z.string().min(1).describe('ID of the decision to update'),
-  outcome: z.string().min(1).describe('What actually happened'),
+  decision_id: CommonFields.decisionId,
+  outcome: CommonFields.content,
   would_do_again: z.boolean().describe('Would you make the same decision?'),
   outcome_notes: z.string().optional().describe('Additional notes or learnings'),
 });
 
 const GetPendingOutcomesSchema = z.object({
-  project: z.string().optional().describe('Filter by project name'),
-  days_old: z
-    .number()
-    .min(1)
-    .max(90)
-    .optional()
-    .describe('Only decisions older than N days (default: 7)'),
-  limit: z.number().min(1).max(20).optional().describe('Maximum results (default: 10)'),
+  project: CommonFields.project,
+  days_old: CommonFields.daysOld,
+  limit: CommonFields.limitSmall,
 });
 
 // ============================================

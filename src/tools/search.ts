@@ -3,24 +3,34 @@ import { defineTool } from '../registry/defineTool.js';
 import { getPocketBase } from '../pocketbase/client.js';
 import { logger } from '../utils/logger.js';
 import { createEmbedding, cosineSimilarity } from '../utils/embeddings.js';
+import {
+  CommonFields,
+  CollectionNameEnum,
+  SourceTypeEnum,
+  Validations,
+  LimitValidations,
+} from '../schemas/index.js';
 
-// Schema definitions
+// ============================================
+// SCHEMA DEFINITIONS
+// ============================================
+
 const SearchKnowledgeSchema = z.object({
-  query: z.string().min(1).describe('Search query'),
-  collections: z.array(z.enum(['observations', 'decisions', 'bugs_and_fixes', 'patterns', 'code_snippets'])).optional().describe('Collections to search in (default: all)'),
-  project: z.string().optional().describe('Filter by project name'),
-  limit: z.number().min(1).max(50).optional().describe('Maximum results (default: 10)'),
-  tags: z.array(z.string()).optional().describe('Filter by tags'),
+  query: CommonFields.query,
+  collections: z.array(CollectionNameEnum).optional().describe('Collections to search in (default: all)'),
+  project: CommonFields.project,
+  limit: LimitValidations.limitMediumLarge.optional().describe('Maximum results (default: 10)'),
+  tags: CommonFields.tags,
 });
 
 const SemanticSearchSchema = z.object({
-  query: z.string().min(1).describe('Natural language query'),
-  collections: z.array(z.enum(['observation', 'decision', 'bug', 'pattern', 'snippet', 'workflow'])).optional().describe('Source types to search (default: all)'),
-  threshold: z.number().min(0).max(1).optional().describe('Similarity threshold (default: 0.7)'),
-  limit: z.number().min(1).max(20).optional().describe('Maximum results (default: 5)'),
-  recency_weight: z.number().min(0).max(1).optional().describe('Weight for recency (0=ignore, 1=strong, default: 0.3)'),
-  importance_weight: z.number().min(0).max(1).optional().describe('Weight for importance (default: 0.2)'),
-  decay_days: z.number().min(1).max(365).optional().describe('Days for recency decay (default: 30)'),
+  query: CommonFields.query,
+  collections: z.array(SourceTypeEnum).optional().describe('Source types to search (default: all)'),
+  threshold: Validations.similarity.optional().describe('Similarity threshold (default: 0.7)'),
+  limit: LimitValidations.limitMediumSmall.optional().describe('Maximum results (default: 5)'),
+  recency_weight: Validations.weight.optional().describe('Weight for recency (0=ignore, 1=strong, default: 0.3)'),
+  importance_weight: Validations.weight.optional().describe('Weight for importance (default: 0.2)'),
+  decay_days: Validations.daysLong.optional().describe('Days for recency decay (default: 30)'),
 });
 
 function matchesQuery(record: Record<string, unknown>, fields: string[], query: string): boolean {

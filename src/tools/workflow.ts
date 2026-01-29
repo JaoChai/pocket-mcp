@@ -5,45 +5,39 @@ import { logger } from '../utils/logger.js';
 import { createEmbedding, cosineSimilarity, saveEmbedding } from '../utils/embeddings.js';
 import { getOrCreateProject } from '../utils/project.js';
 import { nowISO } from '../utils/date.js';
+import {
+  CommonFields,
+  ProjectEntityBase,
+  WorkflowStepBase,
+  Validations,
+} from '../schemas/index.js';
 
 // ============================================
-// SCHEMAS
+// SCHEMA DEFINITIONS
 // ============================================
 
-const WorkflowStepSchema = z.object({
-  order: z.number(),
-  action: z.string(),
-  description: z.string(),
-  tool: z.string().optional(),
-  command: z.string().optional(),
-  check: z.string().optional(),
-  optional: z.boolean().optional(),
-});
-
-const SaveWorkflowSchema = z.object({
-  project: z.string().optional().describe('Project name'),
-  name: z.string().min(1).describe('Workflow name'),
+const SaveWorkflowSchema = ProjectEntityBase.extend({
+  name: CommonFields.title,
   description: z.string().optional().describe('What this workflow accomplishes'),
-  trigger: z.string().min(1).describe('When to use this workflow'),
-  steps: z.array(WorkflowStepSchema).min(1).describe('Ordered list of steps'),
+  trigger: Validations.nonEmptyString.describe('When to use this workflow'),
+  steps: z.array(WorkflowStepBase).min(1).describe('Ordered list of steps'),
   tools_used: z.array(z.string()).optional().describe('Tools/commands used'),
   estimated_duration: z.number().optional().describe('Expected duration in minutes'),
   success_criteria: z.string().optional().describe('How to verify success'),
-  tags: z.array(z.string()).optional(),
 });
 
 const FindWorkflowSchema = z.object({
-  query: z.string().min(1).describe('Natural language description of what you want to do'),
-  project: z.string().optional().describe('Filter by project'),
-  limit: z.number().min(1).max(10).optional().describe('Maximum results (default: 5)'),
+  query: CommonFields.query,
+  project: CommonFields.project,
+  limit: CommonFields.limitSmall,
 });
 
 const GetWorkflowSchema = z.object({
-  workflow_id: z.string().min(1).describe('ID of the workflow'),
+  workflow_id: CommonFields.workflowId,
 });
 
 const RecordWorkflowExecutionSchema = z.object({
-  workflow_id: z.string().min(1).describe('ID of the workflow'),
+  workflow_id: CommonFields.workflowId,
   duration_minutes: z.number().optional().describe('How long it actually took'),
   success: z.boolean().describe('Was execution successful?'),
   notes: z.string().optional().describe('Any notes about this execution'),

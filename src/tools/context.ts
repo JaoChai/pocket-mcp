@@ -2,24 +2,31 @@ import { z } from 'zod';
 import { defineTool } from '../registry/defineTool.js';
 import { getPocketBase } from '../pocketbase/client.js';
 import { logger } from '../utils/logger.js';
+import { CommonFields, PreferenceCategoryEnum, LimitValidations } from '../schemas/index.js';
 
-// Schema definitions
+// ============================================
+// SCHEMA DEFINITIONS
+// ============================================
+
 const GetProjectContextSchema = z.object({
-  project: z.string().min(1).describe('Project name'),
-  include: z.array(z.enum(['tech_stack', 'recent_decisions', 'recent_bugs', 'patterns', 'preferences'])).optional().describe('What to include in context (default: all)'),
-  limit: z.number().min(1).max(20).optional().describe('Max items per category (default: 5)'),
+  project: CommonFields.projectRequired,
+  include: z
+    .array(z.enum(['tech_stack', 'recent_decisions', 'recent_bugs', 'patterns', 'preferences']))
+    .optional()
+    .describe('What to include in context (default: all)'),
+  limit: LimitValidations.limitMediumSmall.optional().describe('Max items per category (default: 5)'),
 });
 
 const GetPreferencesSchema = z.object({
-  category: z.enum(['coding_style', 'tools', 'workflow', 'communication', 'other', 'all']).optional().describe('Preference category (default: all)'),
+  category: PreferenceCategoryEnum.optional().describe('Preference category (default: all)'),
 });
 
 const SavePreferenceSchema = z.object({
-  category: z.enum(['coding_style', 'tools', 'workflow', 'communication', 'other']).describe('Preference category'),
-  preference: z.string().min(1).describe('The preference'),
-  reason: z.string().optional().describe('Reason for this preference'),
+  category: PreferenceCategoryEnum,
+  preference: CommonFields.title,
+  reason: CommonFields.description,
   examples: z.array(z.string()).optional().describe('Examples'),
-  strength: z.number().min(1).max(5).optional().describe('How strong is this preference (1-5)'),
+  strength: CommonFields.strength,
 });
 
 export const getProjectContext = defineTool({

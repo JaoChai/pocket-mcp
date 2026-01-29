@@ -4,24 +4,30 @@ import { getPocketBase } from '../pocketbase/client.js';
 import { logger } from '../utils/logger.js';
 import { getOrCreateProject } from '../utils/project.js';
 import { nowISO } from '../utils/date.js';
+import { CommonFields, SessionOutcomeEnum, ProjectEntityBase } from '../schemas/index.js';
 
 // In-memory current session (per MCP server instance)
 let currentSessionId: string | null = null;
 
-// Schema definitions
-const CreateSessionSchema = z.object({
-  project: z.string().optional().describe('Project name'),
+// ============================================
+// SCHEMA DEFINITIONS
+// ============================================
+
+const CreateSessionSchema = ProjectEntityBase.extend({
   goal: z.string().optional().describe('Session goal'),
 });
 
 const EndSessionSchema = z.object({
-  outcome: z.enum(['success', 'partial', 'failed']).optional().describe('Session outcome'),
+  outcome: SessionOutcomeEnum.optional().describe('Session outcome'),
   summary: z.string().optional().describe('Session summary'),
 });
 
 const GetCurrentSessionSchema = z.object({});
 
-// Tool definitions
+// ============================================
+// TOOL DEFINITIONS
+// ============================================
+
 export const createSession = defineTool({
   name: 'create_session',
   description: 'Start a new work session for tracking activities',

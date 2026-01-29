@@ -2,14 +2,15 @@ import { z } from 'zod';
 import { defineTool } from '../registry/defineTool.js';
 import { getPocketBase } from '../pocketbase/client.js';
 import { logger } from '../utils/logger.js';
+import { CommonFields, RetroTypeEnum, LimitValidations } from '../schemas/index.js';
 
 // ============================================
-// SCHEMAS
+// SCHEMA DEFINITIONS
 // ============================================
 
 const GenerateRetrospectiveSchema = z.object({
-  project: z.string().optional().describe('Project name to reflect on'),
-  period: z.enum(['session', 'daily', 'weekly', 'monthly']).optional().describe('Period for retrospective (default: session)'),
+  project: CommonFields.project,
+  period: RetroTypeEnum.optional().describe('Period for retrospective (default: session)'),
   what_went_well: z.array(z.string()).optional().describe('Things that went well'),
   what_went_wrong: z.array(z.string()).optional().describe('Things that could be improved'),
   lessons_learned: z.array(z.string()).optional().describe('Key lessons learned'),
@@ -17,9 +18,9 @@ const GenerateRetrospectiveSchema = z.object({
 });
 
 const GetLessonsSchema = z.object({
-  project: z.string().optional().describe('Filter by project'),
+  project: CommonFields.project,
   category: z.string().optional().describe('Filter by category'),
-  limit: z.number().min(1).max(50).optional().describe('Maximum results (default: 10)'),
+  limit: LimitValidations.limitMediumLarge.optional().describe('Maximum results (default: 10)'),
 });
 
 // ============================================

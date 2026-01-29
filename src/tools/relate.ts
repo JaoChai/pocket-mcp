@@ -2,30 +2,31 @@ import { z } from 'zod';
 import { defineTool } from '../registry/defineTool.js';
 import { getPocketBase } from '../pocketbase/client.js';
 import { logger } from '../utils/logger.js';
+import { CommonFields, EntityTypeEnum, RelationTypeEnum, LimitValidations } from '../schemas/index.js';
 
 // ============================================
-// SCHEMAS
+// SCHEMA DEFINITIONS
 // ============================================
 
 const LinkEntitiesSchema = z.object({
-  source_type: z.enum(['project', 'observation', 'decision', 'bug', 'pattern', 'snippet', 'resource']).describe('Type of the source entity'),
-  source_id: z.string().min(1).describe('ID of the source entity'),
-  relation: z.enum(['uses', 'caused', 'fixed_by', 'led_to', 'related_to', 'depends_on', 'inspired_by']).describe('Type of relationship'),
-  target_type: z.enum(['project', 'observation', 'decision', 'bug', 'pattern', 'snippet', 'resource']).describe('Type of the target entity'),
-  target_id: z.string().min(1).describe('ID of the target entity'),
+  source_type: EntityTypeEnum,
+  source_id: CommonFields.id,
+  relation: RelationTypeEnum,
+  target_type: EntityTypeEnum,
+  target_id: CommonFields.id,
   context: z.string().optional().describe('Context explaining the relationship'),
 });
 
 const GetRelationsSchema = z.object({
-  entity_type: z.enum(['project', 'observation', 'decision', 'bug', 'pattern', 'snippet', 'resource']).describe('Type of the entity'),
-  entity_id: z.string().min(1).describe('ID of the entity'),
+  entity_type: EntityTypeEnum,
+  entity_id: CommonFields.id,
   direction: z.enum(['outgoing', 'incoming', 'both']).optional().describe('Direction of relations (default: both)'),
 });
 
 const SuggestRelationsSchema = z.object({
-  entity_type: z.enum(['observation', 'decision', 'bug', 'pattern', 'snippet']).describe('Type of the entity'),
-  entity_id: z.string().min(1).describe('ID of the entity'),
-  limit: z.number().min(1).max(10).optional().describe('Max suggestions (default: 5)'),
+  entity_type: EntityTypeEnum,
+  entity_id: CommonFields.id,
+  limit: LimitValidations.limitMediumSmall.optional().describe('Max suggestions (default: 5)'),
 });
 
 // ============================================
