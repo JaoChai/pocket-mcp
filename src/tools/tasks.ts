@@ -1,79 +1,16 @@
 import { z } from 'zod';
+import { defineTool } from '../registry/defineTool.js';
 import { getPocketBase } from '../pocketbase/client.js';
 import { logger } from '../utils/logger.js';
 import { getActiveSessionId } from './session.js';
-
-// Helper function to convert UTC to Thai timezone (Asia/Bangkok)
-function toThaiTime(utcDateString: string | undefined | null): string {
-  if (!utcDateString) {
-    return new Date().toLocaleString('th-TH', {
-      timeZone: 'Asia/Bangkok',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    });
-  }
-
-  const date = new Date(utcDateString);
-
-  if (isNaN(date.getTime())) {
-    return new Date().toLocaleString('th-TH', {
-      timeZone: 'Asia/Bangkok',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    });
-  }
-
-  return date.toLocaleString('th-TH', {
-    timeZone: 'Asia/Bangkok',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-}
-
-// Helper to find or create project
-async function getOrCreateProject(projectName?: string): Promise<string | null> {
-  if (!projectName) return null;
-
-  const pb = await getPocketBase();
-
-  try {
-    const existing = await pb.collection('projects').getFirstListItem(`name="${projectName}"`);
-    return existing.id;
-  } catch {
-    try {
-      const created = await pb.collection('projects').create({
-        name: projectName,
-        status: 'active',
-      });
-      logger.info(`Created new project: ${projectName}`);
-      return created.id;
-    } catch (error) {
-      logger.error('Failed to create project', error);
-      return null;
-    }
-  }
-}
+import { toThaiTime, nowISO } from '../utils/date.js';
+import { getOrCreateProject } from '../utils/project.js';
 
 // ============================================
 // SCHEMA DEFINITIONS
 // ============================================
 
-export const CreateTaskSchema = z.object({
+const CreateTaskSchema = z.object({
   project: z.string().optional().describe('Project name'),
   title: z.string().min(1).describe('Task title'),
   description: z.string().optional().describe('Task description'),
@@ -83,45 +20,58 @@ export const CreateTaskSchema = z.object({
   tags: z.array(z.string()).optional().describe('Tags for categorization'),
 });
 
-export const UpdateTaskSchema = z.object({
+const UpdateTaskSchema = z.object({
   task_id: z.string().min(1).describe('Task ID to update'),
   title: z.string().optional().describe('New title'),
   description: z.string().optional().describe('New description'),
-  status: z.enum(['pending', 'in_progress', 'done', 'blocked', 'cancelled']).optional().describe('New status'),
+  status: z
+    .enum(['pending', 'in_progress', 'done', 'blocked', 'cancelled'])
+    .optional()
+    .describe('New status'),
   priority: z.enum(['critical', 'high', 'medium', 'low']).optional().describe('New priority'),
   blocked_reason: z.string().optional().describe('Reason if blocked'),
   due_date: z.string().optional().describe('New due date'),
   tags: z.array(z.string()).optional().describe('New tags'),
 });
 
-export const GetTasksSchema = z.object({
+const GetTasksSchema = z.object({
   project: z.string().optional().describe('Filter by project name'),
-  status: z.enum(['pending', 'in_progress', 'done', 'blocked', 'cancelled']).optional().describe('Filter by status'),
+  status: z
+    .enum(['pending', 'in_progress', 'done', 'blocked', 'cancelled'])
+    .optional()
+    .describe('Filter by status'),
   feature: z.string().optional().describe('Filter by feature group'),
   priority: z.enum(['critical', 'high', 'medium', 'low']).optional().describe('Filter by priority'),
   limit: z.number().min(1).max(100).optional().describe('Maximum results (default: 50)'),
 });
 
-export const GetProjectProgressSchema = z.object({
+const GetProjectProgressSchema = z.object({
   project: z.string().min(1).describe('Project name'),
   include_details: z.boolean().optional().describe('Include task details (default: true)'),
 });
 
-export const DeleteTaskSchema = z.object({
+const DeleteTaskSchema = z.object({
   task_id: z.string().min(1).describe('Task ID to delete'),
-  soft_delete: z.boolean().optional().describe('Mark as cancelled instead of deleting (default: true)'),
+  soft_delete: z
+    .boolean()
+    .optional()
+    .describe('Mark as cancelled instead of deleting (default: true)'),
 });
 
 // ============================================
-// TOOL IMPLEMENTATIONS
+// TOOL DEFINITIONS
 // ============================================
 
-export async function createTask(input: z.infer<typeof CreateTaskSchema>) {
-  const pb = await getPocketBase();
-  const projectId = await getOrCreateProject(input.project);
-  const sessionId = getActiveSessionId();
+export const createTask = defineTool({
+  name: 'create_task',
+  description: 'Create a new task for tracking work progress',
+  category: 'task',
+  schema: CreateTaskSchema,
+  handler: async (input) => {
+    const pb = await getPocketBase();
+    const projectId = await getOrCreateProject(input.project);
+    const sessionId = getActiveSessionId();
 
-  try {
     const record = await pb.collection('tasks').create({
       session: sessionId,
       project: projectId,
@@ -145,16 +95,17 @@ export async function createTask(input: z.infer<typeof CreateTaskSchema>) {
       created: toThaiTime(record.created),
       message: `Task "${input.title}" created successfully`,
     };
-  } catch (error) {
-    logger.error('Failed to create task', error);
-    throw error;
-  }
-}
+  },
+});
 
-export async function updateTask(input: z.infer<typeof UpdateTaskSchema>) {
-  const pb = await getPocketBase();
+export const updateTask = defineTool({
+  name: 'update_task',
+  description: 'Update task status, priority, or other details',
+  category: 'task',
+  schema: UpdateTaskSchema,
+  handler: async (input) => {
+    const pb = await getPocketBase();
 
-  try {
     // Verify task exists
     const existing = await pb.collection('tasks').getOne(input.task_id);
 
@@ -167,7 +118,7 @@ export async function updateTask(input: z.infer<typeof UpdateTaskSchema>) {
       updateData.status = input.status;
       // Set completed_at when marking as done
       if (input.status === 'done') {
-        updateData.completed_at = new Date().toISOString();
+        updateData.completed_at = nowISO();
       }
     }
     if (input.priority !== undefined) updateData.priority = input.priority;
@@ -187,17 +138,18 @@ export async function updateTask(input: z.infer<typeof UpdateTaskSchema>) {
       updated: toThaiTime(updated.updated),
       message: `Task "${updated.title}" updated successfully`,
     };
-  } catch (error) {
-    logger.error('Failed to update task', error);
-    throw error;
-  }
-}
+  },
+});
 
-export async function getTasks(input: z.infer<typeof GetTasksSchema>) {
-  const pb = await getPocketBase();
-  const limit = input.limit || 50;
+export const getTasks = defineTool({
+  name: 'get_tasks',
+  description: 'Get list of tasks with optional filters (project, status, feature, priority)',
+  category: 'task',
+  schema: GetTasksSchema,
+  handler: async (input) => {
+    const pb = await getPocketBase();
+    const limit = input.limit || 50;
 
-  try {
     // Build filter
     const filters: string[] = [];
 
@@ -253,17 +205,19 @@ export async function getTasks(input: z.infer<typeof GetTasksSchema>) {
       showing: taskList.length,
       tasks: taskList,
     };
-  } catch (error) {
-    logger.error('Failed to get tasks', error);
-    throw error;
-  }
-}
+  },
+});
 
-export async function getProjectProgress(input: z.infer<typeof GetProjectProgressSchema>) {
-  const pb = await getPocketBase();
-  const includeDetails = input.include_details !== false;
+export const getProjectProgress = defineTool({
+  name: 'get_project_progress',
+  description:
+    'Get project progress summary with completion stats, tasks by feature, and next up items',
+  category: 'task',
+  schema: GetProjectProgressSchema,
+  handler: async (input) => {
+    const pb = await getPocketBase();
+    const includeDetails = input.include_details !== false;
 
-  try {
     // Find project
     let projectId: string;
     try {
@@ -292,9 +246,13 @@ export async function getProjectProgress(input: z.infer<typeof GetProjectProgres
       cancelled: 0,
     };
 
-    const byFeature: Record<string, { total: number; done: number; pending: number; in_progress: number }> = {};
+    const byFeature: Record<
+      string,
+      { total: number; done: number; pending: number; in_progress: number }
+    > = {};
     const recentCompleted: Array<{ id: string; title: string; completed_at: string }> = [];
-    const nextUp: Array<{ id: string; title: string; priority: string; feature: string | null }> = [];
+    const nextUp: Array<{ id: string; title: string; priority: string; feature: string | null }> =
+      [];
 
     for (const task of allTasks) {
       // Count by status
@@ -342,10 +300,15 @@ export async function getProjectProgress(input: z.infer<typeof GetProjectProgres
 
     // Sort by priority for next up
     const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
-    nextUp.sort((a, b) => (priorityOrder[a.priority as keyof typeof priorityOrder] || 2) - (priorityOrder[b.priority as keyof typeof priorityOrder] || 2));
+    nextUp.sort(
+      (a, b) =>
+        (priorityOrder[a.priority as keyof typeof priorityOrder] || 2) -
+        (priorityOrder[b.priority as keyof typeof priorityOrder] || 2)
+    );
 
     // Calculate completion percentage
-    const completionPercent = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
+    const completionPercent =
+      stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
 
     const result: Record<string, unknown> = {
       project: input.project,
@@ -362,17 +325,18 @@ export async function getProjectProgress(input: z.infer<typeof GetProjectProgres
     logger.info(`Project progress for ${input.project}: ${completionPercent}% complete`);
 
     return result;
-  } catch (error) {
-    logger.error('Failed to get project progress', error);
-    throw error;
-  }
-}
+  },
+});
 
-export async function deleteTask(input: z.infer<typeof DeleteTaskSchema>) {
-  const pb = await getPocketBase();
-  const softDelete = input.soft_delete !== false;
+export const deleteTask = defineTool({
+  name: 'delete_task',
+  description: 'Delete or cancel a task',
+  category: 'task',
+  schema: DeleteTaskSchema,
+  handler: async (input) => {
+    const pb = await getPocketBase();
+    const softDelete = input.soft_delete !== false;
 
-  try {
     // Verify task exists
     const existing = await pb.collection('tasks').getOne(input.task_id);
 
@@ -405,8 +369,8 @@ export async function deleteTask(input: z.infer<typeof DeleteTaskSchema>) {
         message: `Task "${existing.title}" deleted permanently`,
       };
     }
-  } catch (error) {
-    logger.error('Failed to delete task', error);
-    throw error;
-  }
-}
+  },
+});
+
+// Export all tools as array for easy registration
+export const taskTools = [createTask, updateTask, getTasks, getProjectProgress, deleteTask];

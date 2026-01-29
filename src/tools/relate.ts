@@ -1,41 +1,63 @@
 import { z } from 'zod';
+import { defineTool } from '../registry/defineTool.js';
 import { getPocketBase } from '../pocketbase/client.js';
 import { logger } from '../utils/logger.js';
 
-// Schema definitions
-export const LinkEntitiesSchema = z.object({
-  source_type: z.enum(['project', 'observation', 'decision', 'bug', 'pattern', 'snippet', 'resource'])
-    .describe('Type of the source entity'),
+// ============================================
+// SCHEMAS
+// ============================================
+
+const LinkEntitiesSchema = z.object({
+  source_type: z.enum(['project', 'observation', 'decision', 'bug', 'pattern', 'snippet', 'resource']).describe('Type of the source entity'),
   source_id: z.string().min(1).describe('ID of the source entity'),
-  relation: z.enum(['uses', 'caused', 'fixed_by', 'led_to', 'related_to', 'depends_on', 'inspired_by'])
-    .describe('Type of relationship'),
-  target_type: z.enum(['project', 'observation', 'decision', 'bug', 'pattern', 'snippet', 'resource'])
-    .describe('Type of the target entity'),
+  relation: z.enum(['uses', 'caused', 'fixed_by', 'led_to', 'related_to', 'depends_on', 'inspired_by']).describe('Type of relationship'),
+  target_type: z.enum(['project', 'observation', 'decision', 'bug', 'pattern', 'snippet', 'resource']).describe('Type of the target entity'),
   target_id: z.string().min(1).describe('ID of the target entity'),
   context: z.string().optional().describe('Context explaining the relationship'),
 });
 
-export const GetRelationsSchema = z.object({
-  entity_type: z.enum(['project', 'observation', 'decision', 'bug', 'pattern', 'snippet', 'resource'])
-    .describe('Type of the entity'),
+const GetRelationsSchema = z.object({
+  entity_type: z.enum(['project', 'observation', 'decision', 'bug', 'pattern', 'snippet', 'resource']).describe('Type of the entity'),
   entity_id: z.string().min(1).describe('ID of the entity'),
   direction: z.enum(['outgoing', 'incoming', 'both']).optional().describe('Direction of relations (default: both)'),
 });
 
-// Link two entities
-export async function linkEntities(input: z.infer<typeof LinkEntitiesSchema>) {
-  const pb = await getPocketBase();
+const SuggestRelationsSchema = z.object({
+  entity_type: z.enum(['observation', 'decision', 'bug', 'pattern', 'snippet']).describe('Type of the entity'),
+  entity_id: z.string().min(1).describe('ID of the entity'),
+  limit: z.number().min(1).max(10).optional().describe('Max suggestions (default: 5)'),
+});
 
-  try {
+// ============================================
+// CONSTANTS
+// ============================================
+
+const COLLECTION_MAP: Record<string, string> = {
+  observation: 'observations',
+  decision: 'decisions',
+  bug: 'bugs_and_fixes',
+  pattern: 'patterns',
+  snippet: 'code_snippets',
+};
+
+// ============================================
+// TOOL DEFINITIONS
+// ============================================
+
+export const linkEntities = defineTool({
+  name: 'link_entities',
+  description: 'Create a relationship between two entities (knowledge graph edge)',
+  category: 'relation',
+  schema: LinkEntitiesSchema,
+  handler: async (input) => {
+    const pb = await getPocketBase();
+
     // Check if relationship already exists
     try {
       await pb.collection('relationships').getFirstListItem(
         `source_type="${input.source_type}" && source_id="${input.source_id}" && relation="${input.relation}" && target_type="${input.target_type}" && target_id="${input.target_id}"`
       );
-      return {
-        success: false,
-        message: 'Relationship already exists',
-      };
+      return { success: false, message: 'Relationship already exists' };
     } catch {
       // Relationship doesn't exist, create it
     }
@@ -56,49 +78,30 @@ export async function linkEntities(input: z.infer<typeof LinkEntitiesSchema>) {
       id: record.id,
       message: `Linked ${input.source_type} to ${input.target_type} with relation "${input.relation}"`,
     };
-  } catch (error) {
-    logger.error('Failed to link entities', error);
-    throw error;
-  }
-}
+  },
+});
 
-// Get relations for an entity
-export async function getRelations(input: z.infer<typeof GetRelationsSchema>) {
-  const pb = await getPocketBase();
-  const direction = input.direction || 'both';
+export const getRelations = defineTool({
+  name: 'get_relations',
+  description: 'Get all relationships for an entity',
+  category: 'relation',
+  schema: GetRelationsSchema,
+  handler: async (input) => {
+    const pb = await getPocketBase();
+    const direction = input.direction || 'both';
 
-  const relations: {
-    outgoing: Array<{
-      id: string;
-      relation: string;
-      target_type: string;
-      target_id: string;
-      context: string;
-    }>;
-    incoming: Array<{
-      id: string;
-      relation: string;
-      source_type: string;
-      source_id: string;
-      context: string;
-    }>;
-  } = {
-    outgoing: [],
-    incoming: [],
-  };
+    const relations: {
+      outgoing: Array<{ id: string; relation: string; target_type: string; target_id: string; context: string }>;
+      incoming: Array<{ id: string; relation: string; source_type: string; source_id: string; context: string }>;
+    } = { outgoing: [], incoming: [] };
 
-  try {
     // Get outgoing relations
     if (direction === 'outgoing' || direction === 'both') {
       const outgoing = await pb.collection('relationships').getFullList({
         filter: `source_type="${input.entity_type}" && source_id="${input.entity_id}"`,
       });
       relations.outgoing = outgoing.map(r => ({
-        id: r.id,
-        relation: r.relation,
-        target_type: r.target_type,
-        target_id: r.target_id,
-        context: r.context || '',
+        id: r.id, relation: r.relation, target_type: r.target_type, target_id: r.target_id, context: r.context || '',
       }));
     }
 
@@ -108,11 +111,7 @@ export async function getRelations(input: z.infer<typeof GetRelationsSchema>) {
         filter: `target_type="${input.entity_type}" && target_id="${input.entity_id}"`,
       });
       relations.incoming = incoming.map(r => ({
-        id: r.id,
-        relation: r.relation,
-        source_type: r.source_type,
-        source_id: r.source_id,
-        context: r.context || '',
+        id: r.id, relation: r.relation, source_type: r.source_type, source_id: r.source_id, context: r.context || '',
       }));
     }
 
@@ -123,63 +122,36 @@ export async function getRelations(input: z.infer<typeof GetRelationsSchema>) {
       total_incoming: relations.incoming.length,
       relations,
     };
-  } catch (error) {
-    logger.error('Failed to get relations', error);
-    throw error;
-  }
-}
-
-// Auto-suggest relations based on content similarity
-export const SuggestRelationsSchema = z.object({
-  entity_type: z.enum(['observation', 'decision', 'bug', 'pattern', 'snippet'])
-    .describe('Type of the entity'),
-  entity_id: z.string().min(1).describe('ID of the entity'),
-  limit: z.number().min(1).max(10).optional().describe('Max suggestions (default: 5)'),
+  },
 });
 
-export async function suggestRelations(input: z.infer<typeof SuggestRelationsSchema>) {
-  const pb = await getPocketBase();
-  const limit = input.limit || 5;
+export const suggestRelations = defineTool({
+  name: 'suggest_relations',
+  description: 'Auto-suggest possible relations based on shared tags',
+  category: 'relation',
+  schema: SuggestRelationsSchema,
+  handler: async (input) => {
+    const pb = await getPocketBase();
+    const limit = input.limit || 5;
 
-  try {
-    // Get the entity's tags
-    const collectionMap: Record<string, string> = {
-      observation: 'observations',
-      decision: 'decisions',
-      bug: 'bugs_and_fixes',
-      pattern: 'patterns',
-      snippet: 'code_snippets',
-    };
-
-    const collectionName = collectionMap[input.entity_type];
+    const collectionName = COLLECTION_MAP[input.entity_type];
     const entity = await pb.collection(collectionName).getOne(input.entity_id);
     const tags = entity.tags || [];
 
     if (tags.length === 0) {
-      return {
-        suggestions: [],
-        message: 'No tags found on entity to suggest relations',
-      };
+      return { suggestions: [], message: 'No tags found on entity to suggest relations' };
     }
 
     // Find other entities with similar tags
-    const suggestions: Array<{
-      type: string;
-      id: string;
-      title: string;
-      shared_tags: string[];
-      suggested_relation: string;
-    }> = [];
+    const suggestions: Array<{ type: string; id: string; title: string; shared_tags: string[]; suggested_relation: string }> = [];
 
-    for (const [type, collection] of Object.entries(collectionMap)) {
+    for (const [type, collection] of Object.entries(COLLECTION_MAP)) {
       if (type === input.entity_type) continue;
 
       const tagFilter = tags.map((t: string) => `tags~"${t}"`).join(' || ');
 
       try {
-        const similar = await pb.collection(collection).getList(1, limit, {
-          filter: tagFilter,
-        });
+        const similar = await pb.collection(collection).getList(1, limit, { filter: tagFilter });
 
         for (const item of similar.items) {
           const sharedTags = tags.filter((t: string) => (item.tags || []).includes(t));
@@ -201,13 +173,8 @@ export async function suggestRelations(input: z.infer<typeof SuggestRelationsSch
     // Sort by number of shared tags
     suggestions.sort((a, b) => b.shared_tags.length - a.shared_tags.length);
 
-    return {
-      entity_type: input.entity_type,
-      entity_id: input.entity_id,
-      suggestions: suggestions.slice(0, limit),
-    };
-  } catch (error) {
-    logger.error('Failed to suggest relations', error);
-    throw error;
-  }
-}
+    return { entity_type: input.entity_type, entity_id: input.entity_id, suggestions: suggestions.slice(0, limit) };
+  },
+});
+
+export const relateTools = [linkEntities, getRelations, suggestRelations];

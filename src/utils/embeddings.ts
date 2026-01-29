@@ -2,7 +2,31 @@ import OpenAI from 'openai';
 import pRetry, { AbortError } from 'p-retry';
 import { config } from '../config.js';
 import { logger } from './logger.js';
+import { getPocketBase } from '../pocketbase/client.js';
 import crypto from 'crypto';
+
+/**
+ * Valid source types for embeddings
+ */
+export type EmbeddingSourceType =
+  | 'observation'
+  | 'decision'
+  | 'bug'
+  | 'snippet'
+  | 'workflow'
+  | 'pattern';
+
+/**
+ * Options for saveEmbedding
+ */
+export interface SaveEmbeddingOptions {
+  /**
+   * Update strategy when embedding already exists
+   * - 'skip': Skip if contentHash matches (default for most entities)
+   * - 'replace': Delete existing and create new (upsert pattern)
+   */
+  onExisting?: 'skip' | 'replace';
+}
 
 let openai: OpenAI | null = null;
 
@@ -82,4 +106,94 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   }
 
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+/**
+ * Save embedding vector for a record
+ *
+ * @param sourceType - Type of the source entity
+ * @param sourceId - ID of the source record
+ * @param content - Text content to embed
+ * @param options - Configuration options
+ *
+ * @example
+ * // Skip if same content exists (default)
+ * await saveEmbedding('observation', recordId, 'Title\nContent');
+ *
+ * // Always replace existing (for workflows)
+ * await saveEmbedding('workflow', recordId, content, { onExisting: 'replace' });
+ */
+export async function saveEmbedding(
+  sourceType: EmbeddingSourceType,
+  sourceId: string,
+  content: string,
+  options: SaveEmbeddingOptions = {}
+): Promise<void> {
+  const { onExisting = 'skip' } = options;
+
+  try {
+    const pb = await getPocketBase();
+    const contentHash = hashContent(content);
+
+    if (onExisting === 'skip') {
+      // Check if embedding already exists with same content
+      try {
+        await pb.collection('embeddings').getFirstListItem(
+          `source_id="${sourceId}" && content_hash="${contentHash}"`
+        );
+        logger.debug(`Embedding already exists for ${sourceType}:${sourceId}`);
+        return; // Skip - embedding already exists with same content
+      } catch {
+        // Continue to create new embedding
+      }
+    } else if (onExisting === 'replace') {
+      // Delete existing embedding for this source
+      try {
+        const existing = await pb.collection('embeddings').getFirstListItem(
+          `source_id="${sourceId}" && source_type="${sourceType}"`
+        );
+        await pb.collection('embeddings').delete(existing.id);
+        logger.debug(`Deleted existing embedding for ${sourceType}:${sourceId}`);
+      } catch {
+        // No existing embedding - continue
+      }
+    }
+
+    // Create embedding vector
+    const vector = await createEmbedding(content);
+
+    // Save to database
+    await pb.collection('embeddings').create({
+      source_type: sourceType,
+      source_id: sourceId,
+      content_hash: contentHash,
+      vector: vector,
+      model: config.openai.model,
+    });
+
+    logger.info(`Saved embedding for ${sourceType}:${sourceId}`);
+  } catch (error) {
+    logger.error(`Failed to save embedding for ${sourceType}:${sourceId}`, error);
+    // Don't throw - embedding is secondary/optional
+  }
+}
+
+/**
+ * Save embedding asynchronously (fire and forget)
+ * Wrapper for use in capture functions where embedding is non-blocking
+ *
+ * @param sourceType - Type of the source entity
+ * @param sourceId - ID of the source record
+ * @param content - Text content to embed
+ * @param options - Configuration options
+ */
+export function saveEmbeddingAsync(
+  sourceType: EmbeddingSourceType,
+  sourceId: string,
+  content: string,
+  options: SaveEmbeddingOptions = {}
+): void {
+  saveEmbedding(sourceType, sourceId, content, options).catch(() => {
+    // Swallow error - already logged in saveEmbedding
+  });
 }
