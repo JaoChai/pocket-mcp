@@ -94,7 +94,7 @@ async function setupCollections() {
       const created = await pb.collections.create({
         name: name,
         type: collectionDef.type,
-        schema: schemaWithoutRelations,
+        fields: schemaWithoutRelations,
       });
       console.log(`[CREATE] Collection '${name}' created with ID: ${created.id}`);
       collectionIds[name] = created.id;

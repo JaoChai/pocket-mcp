@@ -231,7 +231,6 @@ export async function getTasks(input: z.infer<typeof GetTasksSchema>) {
     const tasks = await pb.collection('tasks').getList(1, limit, {
       filter,
       sort: '-created',
-      expand: 'project',
     });
 
     const taskList = tasks.items.map((t) => ({
@@ -241,7 +240,6 @@ export async function getTasks(input: z.infer<typeof GetTasksSchema>) {
       feature: t.feature || null,
       status: t.status,
       priority: t.priority,
-      project: t.expand?.project?.name || null,
       created: toThaiTime(t.created),
       completed_at: t.completed_at ? toThaiTime(t.completed_at) : null,
       due_date: t.due_date || null,
